@@ -106,18 +106,29 @@ g_legend <- function(a.gplot) {
 # Saving figures for AJEV 
 W_SINGLE <- 3.5      # single-column width  (inches)
 W_DOUBLE <- 7.25     # double-column width  (inches)
-DPI_FIG  <- 300      # raster resolution for line art / combination figures
+DPI_FIG  <- 600      # AJEV: 600 dpi for line art and combination figures
+                     # (300 dpi applies only to halftones/photographs, of
+                     # which this paper has none). Every figure here is a
+                     # chart with text, i.e. combination art.
 
 #' Save a figure as both vector PDF and raster PNG
 save_fig <- function(plot, stem, height, width = W_DOUBLE) {
-  stopifnot(inherits(plot, c("ggplot", "patchwork")), is.character(stem))
+  # "gtable"/"grob" are accepted so figures assembled with grid.arrange() or
+  # arrangeGrob() (Figure 1) can be saved through the same path as patchwork
+  # figures. bg = "white" is required on BOTH devices: a gtable carries no
+  # background of its own, and a patchwork's outer region (where a shared
+  # legend sits) is transparent even when each panel's theme_classic() is
+  # white. Without it the area behind the legend exports transparent, which
+  # can render black in some print/PDF workflows.
+  stopifnot(inherits(plot, c("ggplot", "patchwork", "gtable", "grob")),
+            is.character(stem))
   ggsave(here::here("figures", paste0(stem, ".pdf")), plot,
          device = cairo_pdf, width = width, height = height,
-    bg = "white")
+         bg = "white")
   ggsave(here::here("figures", paste0(stem, ".png")), plot, type = "cairo",
-         width = width, height = height, dpi = DPI_FIG)
-  message(sprintf("saved %s  (%.2f x %.2f in)", stem, width, height,
-    bg = "white"))
+         width = width, height = height, dpi = DPI_FIG,
+         bg = "white")
+  message(sprintf("saved %s  (%.2f x %.2f in)", stem, width, height))
   invisible(plot)
 }
 
@@ -549,10 +560,7 @@ barrett_SIZE2 <- emm_VMB89_area1_df$emmean[emm_VMB89_area1_df$Accession == "Barr
 barrett_SIZE2 /freedom_SIZE2
 
 1-(barrett_SIZE2 /freedom_SIZE2)
-# Results: supplies ONLY the "48% smaller" figure in the Figure 1C sentence. The
-# accompanying estimate is annotated on pairs(emm_VMB89_area1) above
-# (-0.95 +/- 0.16 SE, p < 0.001, averaged across experiments), which is the
-# wording the manuscript uses.
+# Results: "As observed in the initial diversity screen, the additional 12-day no-choice assays combined with the initial data confirmed that mealybugs developing on Barrett Mn‑1 were 48% smaller than those on Freedom (estimate = -0.95 ± 0.16 SE, p < 0.001, averaged across test dates) (Figure 1C)."
 
 
 print(lme4::VarCorr(m_area_interaction), comp = "Variance")
@@ -928,13 +936,9 @@ layout <- rbind(
   c(5, 5)    # row 3: legend spanning both columns
 )
 
-Final_4panel_figure <- grid.arrange(
-  grobs = list(Fig1A, Fig1B, Fig1C, Fig1D, legend),
-  layout_matrix = layout,
-  widths = c(1, 1),
-  heights = c(1, 1, 0.2)
-)
-
+# arrangeGrob() builds the gtable without drawing it. grid.arrange() was
+# previously called first with the same arguments and then overwritten on the
+# next line, so it only drew a throwaway copy to the device.
 Final_4panel_figure <- arrangeGrob(
   grobs = list(Fig1A, Fig1B, Fig1C, Fig1D, legend),
   layout_matrix = layout,
@@ -942,11 +946,14 @@ Final_4panel_figure <- arrangeGrob(
   heights = c(1, 1, 0.2)
 )
 
+# Draw it in the notebook for inspection
+grid::grid.newpage(); grid::grid.draw(Final_4panel_figure)
 
-ggsave(here::here("figures", "AEJV_Fig1ABCD_Recovery_Area.pdf"), Final_4panel_figure,
-       device = cairo_pdf, width = 7.25, height = 8.25)
-ggsave(here::here("figures", "AEJV_Fig1ABCD_Recovery_Area.png"), Final_4panel_figure,
-       type = "cairo", width = 7.25, height = 8.25, dpi = 600)
+# Saved through save_fig() so this figure gets the same white background,
+# dimensions and DPI as the others. It was previously saved with two bare
+# ggsave() calls that omitted bg = "white", which left the region behind the
+# legend transparent in the exported PNG.
+save_fig(Final_4panel_figure, "AEJV_Fig1ABCD_Recovery_Area", height = 8.25)
 
 ```
 
@@ -2331,10 +2338,10 @@ stopifnot(
 
 
 # Validation gates 
-# Gate 1 (calibration): true effect zero. A correctly specified pipeline rejects at the nominal rate. Expecting 0.03 to 0.07.
+# Gate 1 (calibration): true effect zero. A correctly specified pipeline rejects at the nominal rate. Expecting 0.03- 0.07.
   #shows the test is not too liberal
 # Gate 2 (recovery of a known effect): observed effect (-0.95) on roughly the observed design (2 experiments, 13 cages per accession). Expect power at or very near 1.00
-  #shows the test is not too conservative.
+  #shows the test it is not too conservative.
 
 if (RUN_GATES) {
   print(powerSim(build_growth_model(10, 3, effect_mm2 = 0),
@@ -2372,7 +2379,7 @@ stopifnot(nrow(power_growth) == nrow(design_grid_5A),
           max(power_growth$fail_rate) == 0)
 
 power_growth <- power_growth |>
-  dplyr::mutate(effect_lab = factor(round(effect_mm2, 3),
+  dplyr::mutate(effect_lab = factor(round(effect_mm2, 3), 
                                     levels = round(effect_table_A$effect_mm2, 3),
                                     labels = paste0(effect_table_A$reduction_pct, "%")))
 
@@ -2442,7 +2449,7 @@ power_growth_sens |>
 # Figure 5B: Power analysis simulation for 12-day recovery
 ```{r}
 # Question: how many cages per accession are needed to detect a given percentage-point reduction in VMB recovery?
-# Design note: the accession x experiment interaction was not significant for recovery so the accession effect is treated as consistent across test dates. Experiment is kept as a fixed nuisance effect because baseline recovery differs strongly between runs (p = 3.4e-07). Uses cache_or_run(), summarise_power() and crossing() from the 5A chunk.
+# Design note: the accession x experiment interaction was not significant for recovery so the accession effect is treated as consistent across test dates Experiment is kept as a fixed nuisance effect because baseline recovery differs strongly between runs (p = 3.4e-07). Uses cache_or_run(), summarise_power() and crossing() from the 5A chunk.
 
 # Parameters (from the 88-cage recovery model, Figure 1D)
 
@@ -2526,8 +2533,8 @@ stopifnot(
 #                 1.463                 -1.554                  0.735                  2.055 
 
 # Validation gates 
-# Gate 1 (calibration): no effect. Expect 0.03 to 0.07. Shows the test is not too liberal.
-# Gate 2 (recovery of a known effect): observed effect (-1.554). Expect > 0.95, consistent with the observed z = -6.20. Shows the test is not too conservative.
+# Gate 1 (calibration): no effect. Expect 0.03 to 0.07.- shows that test isn't too liberal
+# Gate 2 (recovery of a known effect): observed effect (-1.554). Expect > 0.95, consistent with the observed z = -6.20.- shows that test isn't too conservative.
 
 
 if (RUN_GATES) {
@@ -2838,7 +2845,7 @@ stopifnot(!anyNA(power_growth_data$effect_n), !anyNA(power_recovery_data$effect_
 
 
 ## Panel A: growth
-# Truncated at 48 cages per accession with the 90% crossings falling at about 44 (20% reduction), 19 (30%) and 12 (40%), all visible, and the 45-cage point is retained. Keeping the 60-cage point would make this panel half again as wide as B (recovery)
+# Truncated at 48 cages per accession with the 90% crossings fallling at about 44 (20% reduction), 19 (30%) and 12 (40%), all  visible, and the 45-cage point is retained. Keeping the 60-cage point would make this panel half again as wide as B (recovery)
 
 power_growth_panel_A <- ggplot(power_growth_data, aes(cages_per_accession, power, colour = effect_n)) +
   ref_lines +
