@@ -1,0 +1,59 @@
+# --- R / RStudio session state -------------------------------------------
+.Rproj.user/
+.Rhistory
+.Rapp.history
+.RData
+.Ruserdata
+*.Rproj.user
+
+# --- OS cruft -------------------------------------------------------------
+.DS_Store
+Thumbs.db
+
+# --- renv -----------------------------------------------------------------
+# renv.lock IS tracked (it pins the package versions). The library is not.
+renv/library/
+renv/local/
+renv/cellar/
+renv/lock.json
+renv/python/
+renv/sandbox/
+renv/staging/
+
+# --- Generated output -----------------------------------------------------
+# Regenerated figures. The versions submitted to AJEV are tracked under
+# figures/published/ and are deliberately NOT ignored.
+figures/*
+!figures/published/
+!figures/published/**
+!figures/.gitkeep
+
+# --- Raw data -------------------------------------------------------------
+# Raw per-assay collection files are archived at the Ag Data Commons DOI
+# listed in the README. The analysis reads only data/processed/.
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/README.md
+
+# --- Rendered notebooks ---------------------------------------------------
+# The rendered notebook is large but useful; commit it deliberately with
+#   git add -f analysis/01_VMB_resistance_analysis.nb.html
+*.nb.html
+*.html
+!README.html
+
+# --- Never commit ---------------------------------------------------------
+# Editorial Manager builds contain the signed author agreement.
+manuscript/
+*AJEV-S-*.pdf
+
+# --- Final overrides (must stay LAST) --------------------------------------
+# Git applies the LAST matching pattern, so the "!figures/published/**"
+# re-inclusion above was overriding the .DS_Store rule at the top of this file
+# and allowing figures/published/.DS_Store to be committed. Re-asserting it here
+# wins, because nothing follows.
+**/.DS_Store
+**/Thumbs.db
+
+# One-time audit scaffolding; 02_verify_results.R is the maintained check
+analysis/03_audit_reported_values.R

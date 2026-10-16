@@ -1,0 +1,531 @@
+Generated: 2026-10-16 09:03:45 PDT 
+Paste these into Literature Cited, reformatted to AJEV style
+(DOI where available; 'and' before the final author).
+
+R itself:
+To cite R in publications use:
+
+  R Core Team (2026). _R: A Language and Environment for Statistical Computing_. R Foundation for Statistical
+  Computing, Vienna, Austria. doi:10.32614/R.manuals <https://doi.org/10.32614/R.manuals>.
+  <https://www.R-project.org/>.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {R: A Language and Environment for Statistical Computing},
+    author = {{R Core Team}},
+    organization = {R Foundation for Statistical Computing},
+    address = {Vienna, Austria},
+    year = {2026},
+    doi = {10.32614/R.manuals},
+    url = {https://www.R-project.org/},
+  }
+
+We have invested a lot of time and effort in creating R, please cite it when using it for data analysis. See also
+‘citation("pkgname")’ for citing R packages.
+
+
+==================== lme4 (v2.0.1) ====================
+
+To cite lme4 in publications use:
+
+  Douglas Bates, Martin Maechler, Ben Bolker, Steve Walker (2015). Fitting Linear Mixed-Effects Models Using lme4.
+  Journal of Statistical Software, 67(1), 1-48. doi:10.18637/jss.v067.i01.
+
+A BibTeX entry for LaTeX users is
+
+  @Article{,
+    title = {Fitting Linear Mixed-Effects Models Using {lme4}},
+    author = {Douglas Bates and Martin M{\"a}chler and Ben Bolker and Steve Walker},
+    journal = {Journal of Statistical Software},
+    year = {2015},
+    volume = {67},
+    number = {1},
+    pages = {1--48},
+    doi = {10.18637/jss.v067.i01},
+  }
+
+
+==================== lmerTest (v3.2.1) ====================
+
+To cite lmerTest in publications use:
+
+  Kuznetsova A, Brockhoff PB, Christensen RHB (2017). “lmerTest Package: Tests in Linear Mixed Effects Models.”
+  _Journal of Statistical Software_, *82*(13), 1-26. doi:10.18637/jss.v082.i13
+  <https://doi.org/10.18637/jss.v082.i13>.
+
+A BibTeX entry for LaTeX users is
+
+  @Article{,
+    title = {{lmerTest} Package: Tests in Linear Mixed Effects Models},
+    author = {Alexandra Kuznetsova and Per B. Brockhoff and Rune H. B. Christensen},
+    journal = {Journal of Statistical Software},
+    year = {2017},
+    volume = {82},
+    number = {13},
+    pages = {1--26},
+    doi = {10.18637/jss.v082.i13},
+  }
+
+
+==================== glmmTMB (v1.1.14) ====================
+
+To cite glmmTMB in publications use:
+
+  Mollie E. Brooks, Kasper Kristensen, Koen J. van Benthem, Arni Magnusson, Casper W. Berg, Anders Nielsen, Hans J.
+  Skaug, Martin Maechler and Benjamin M. Bolker (2017). glmmTMB Balances Speed and Flexibility Among Packages for
+  Zero-inflated Generalized Linear Mixed Modeling. The R Journal, 9(2), 378-400. doi: 10.32614/RJ-2017-066.
+
+To cite glmmTMB in publications use:
+
+  McGillycuddy M, Warton DI, Popovic G, Bolker BM (2025). “Parsimoniously Fitting Large Multivariate Random Effects
+  in glmmTMB.” _Journal of Statistical Software_, *112*(1), 1-19. doi:10.18637/jss.v112.i01
+  <https://doi.org/10.18637/jss.v112.i01>.
+
+To see these entries in BibTeX format, use 'print(<citation>, bibtex=TRUE)', 'toBibtex(.)', or set
+'options(citation.bibtex.max=999)'.
+
+
+==================== mgcv (v1.9.4) ====================
+
+2011 for generalized additive model method; 2016 for beyond exponential family; 2004 for strictly additive GCV based
+model method and basics of gamm; 2017 for overview; 2003 for thin plate regression splines.
+
+  Wood, S.N. (2011) Fast stable restricted maximum likelihood and marginal likelihood estimation of semiparametric
+  generalized linear models. Journal of the Royal Statistical Society (B) 73(1):3-36
+
+  Wood S.N., N. Pya and B. Saefken (2016) Smoothing parameter and model selection for general smooth models (with
+  discussion). Journal of the American Statistical Association 111:1548-1575.
+
+  Wood, S.N. (2004) Stable and efficient multiple smoothing parameter estimation for generalized additive models.
+  Journal of the American Statistical Association. 99:673-686.
+
+  Wood, S.N. (2017) Generalized Additive Models: An Introduction with R (2nd edition). Chapman and Hall/CRC.
+
+  Wood, S.N. (2003) Thin-plate regression splines. Journal of the Royal Statistical Society (B) 65(1):95-114.
+
+To see these entries in BibTeX format, use 'print(<citation>, bibtex=TRUE)', 'toBibtex(.)', or set
+'options(citation.bibtex.max=999)'.
+
+
+==================== simr (v1.0.9) ====================
+
+To cite package ‘simr’ in publications use:
+
+  Green P, MacLeod CJ (2016). “simr: an R package for power analysis of generalised linear mixed models by
+  simulation.” _Methods in Ecology and Evolution_, *7*(4), 493-498. doi:10.1111/2041-210X.12504
+  <https://doi.org/10.1111/2041-210X.12504>. <https://CRAN.R-project.org/package=simr>.
+
+A BibTeX entry for LaTeX users is
+
+  @Article{,
+    title = {simr: an R package for power analysis of generalised linear mixed models by simulation},
+    author = {Peter Green and Catriona J. MacLeod},
+    journal = {Methods in Ecology and Evolution},
+    volume = {7},
+    number = {4},
+    pages = {493--498},
+    year = {2016},
+    doi = {10.1111/2041-210X.12504},
+    url = {https://CRAN.R-project.org/package=simr},
+  }
+
+
+==================== emmeans (v2.0.3) ====================
+
+To cite package ‘emmeans’ in publications use:
+
+  Lenth R, Piaskowski J (2026). _emmeans: Estimated Marginal Means, aka Least-Squares Means_.
+  doi:10.32614/CRAN.package.emmeans <https://doi.org/10.32614/CRAN.package.emmeans>. R package version 2.0.3,
+  <https://CRAN.R-project.org/package=emmeans>.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {emmeans: Estimated Marginal Means, aka Least-Squares Means},
+    author = {Russell V. Lenth and Julia Piaskowski},
+    year = {2026},
+    note = {R package version 2.0.3},
+    url = {https://CRAN.R-project.org/package=emmeans},
+    doi = {10.32614/CRAN.package.emmeans},
+  }
+
+
+==================== multcomp (v1.4.30) ====================
+
+Please cite the multcomp package by the following reference:
+
+  Hothorn T, Bretz F, Westfall P (2008). “Simultaneous Inference in General Parametric Models.” _Biometrical
+  Journal_, *50*(3), 346-363.
+
+A BibTeX entry for LaTeX users is
+
+  @Article{,
+    title = {Simultaneous Inference in General Parametric Models},
+    author = {Torsten Hothorn and Frank Bretz and Peter Westfall},
+    journal = {Biometrical Journal},
+    year = {2008},
+    volume = {50},
+    number = {3},
+    pages = {346--363},
+  }
+
+
+==================== multcompView (v0.1.12) ====================
+
+To cite package ‘multcompView’ in publications use:
+
+  Graves S, Piepho H, Selzer L (2026). _multcompView: Visualizations of Paired Comparisons_.
+  doi:10.32614/CRAN.package.multcompView <https://doi.org/10.32614/CRAN.package.multcompView>. R package version
+  0.1-12, <https://CRAN.R-project.org/package=multcompView>.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {multcompView: Visualizations of Paired Comparisons},
+    author = {Spencer Graves and Hans-Peter Piepho and Luciano Selzer},
+    year = {2026},
+    note = {R package version 0.1-12},
+    url = {https://CRAN.R-project.org/package=multcompView},
+    doi = {10.32614/CRAN.package.multcompView},
+  }
+
+
+==================== car (v3.1.5) ====================
+
+To cite the car package in publications use:
+
+  Fox J, Weisberg S (2019). _An R Companion to Applied Regression_, Third edition. Sage, Thousand Oaks CA.
+  <https://www.john-fox.ca/Companion/>.
+
+A BibTeX entry for LaTeX users is
+
+  @Book{,
+    title = {An {R} Companion to Applied Regression},
+    edition = {Third},
+    author = {John Fox and Sanford Weisberg},
+    year = {2019},
+    publisher = {Sage},
+    address = {Thousand Oaks {CA}},
+    url = {https://www.john-fox.ca/Companion/},
+  }
+
+
+==================== DHARMa (v0.5.0) ====================
+
+To cite package ‘DHARMa’ in publications use:
+
+  Hartig F (2026). _DHARMa: Residual Diagnostics for Hierarchical (Multi-Level / Mixed) Regression Models_.
+  doi:10.32614/CRAN.package.DHARMa <https://doi.org/10.32614/CRAN.package.DHARMa>. R package version 0.5.0,
+  <https://CRAN.R-project.org/package=DHARMa>.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {DHARMa: Residual Diagnostics for Hierarchical (Multi-Level / Mixed)
+Regression Models},
+    author = {Florian Hartig},
+    year = {2026},
+    note = {R package version 0.5.0},
+    url = {https://CRAN.R-project.org/package=DHARMa},
+    doi = {10.32614/CRAN.package.DHARMa},
+  }
+
+
+==================== binom (v1.1.1.1) ====================
+
+To cite package ‘binom’ in publications use:
+
+  Dorai-Raj S (2022). _binom: Binomial Confidence Intervals for Several Parameterizations_.
+  doi:10.32614/CRAN.package.binom <https://doi.org/10.32614/CRAN.package.binom>. R package version 1.1-1.1,
+  <https://CRAN.R-project.org/package=binom>.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {binom: Binomial Confidence Intervals for Several Parameterizations},
+    author = {Sundar Dorai-Raj},
+    year = {2022},
+    note = {R package version 1.1-1.1},
+    url = {https://CRAN.R-project.org/package=binom},
+    doi = {10.32614/CRAN.package.binom},
+  }
+
+ATTENTION: This citation information has been auto-generated from the package DESCRIPTION file and may need manual
+editing, see ‘help("citation")’.
+
+
+==================== dplyr (v1.2.1) ====================
+
+To cite package ‘dplyr’ in publications use:
+
+  Wickham H, François R, Henry L, Müller K, Vaughan D (2026). _dplyr: A Grammar of Data Manipulation_.
+  doi:10.32614/CRAN.package.dplyr <https://doi.org/10.32614/CRAN.package.dplyr>. R package version 1.2.1,
+  <https://CRAN.R-project.org/package=dplyr>.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {dplyr: A Grammar of Data Manipulation},
+    author = {Hadley Wickham and Romain François and Lionel Henry and Kirill Müller and Davis Vaughan},
+    year = {2026},
+    note = {R package version 1.2.1},
+    url = {https://CRAN.R-project.org/package=dplyr},
+    doi = {10.32614/CRAN.package.dplyr},
+  }
+
+
+==================== tidyr (v1.3.2) ====================
+
+To cite package ‘tidyr’ in publications use:
+
+  Wickham H, Vaughan D, Girlich M (2025). _tidyr: Tidy Messy Data_. doi:10.32614/CRAN.package.tidyr
+  <https://doi.org/10.32614/CRAN.package.tidyr>. R package version 1.3.2,
+  <https://CRAN.R-project.org/package=tidyr>.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {tidyr: Tidy Messy Data},
+    author = {Hadley Wickham and Davis Vaughan and Maximilian Girlich},
+    year = {2025},
+    note = {R package version 1.3.2},
+    url = {https://CRAN.R-project.org/package=tidyr},
+    doi = {10.32614/CRAN.package.tidyr},
+  }
+
+
+==================== tibble (v3.3.1) ====================
+
+To cite package ‘tibble’ in publications use:
+
+  Müller K, Wickham H (2026). _tibble: Simple Data Frames_. doi:10.32614/CRAN.package.tibble
+  <https://doi.org/10.32614/CRAN.package.tibble>. R package version 3.3.1,
+  <https://CRAN.R-project.org/package=tibble>.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {tibble: Simple Data Frames},
+    author = {Kirill Müller and Hadley Wickham},
+    year = {2026},
+    note = {R package version 3.3.1},
+    url = {https://CRAN.R-project.org/package=tibble},
+    doi = {10.32614/CRAN.package.tibble},
+  }
+
+
+==================== ggplot2 (v4.0.3) ====================
+
+To cite ggplot2 in publications, please use
+
+  H. Wickham. ggplot2: Elegant Graphics for Data Analysis. Springer-Verlag New York, 2016.
+
+A BibTeX entry for LaTeX users is
+
+  @Book{,
+    author = {Hadley Wickham},
+    title = {ggplot2: Elegant Graphics for Data Analysis},
+    publisher = {Springer-Verlag New York},
+    year = {2016},
+    isbn = {978-3-319-24277-4},
+    url = {https://ggplot2.tidyverse.org},
+  }
+
+
+==================== forcats (v1.0.1) ====================
+
+To cite package ‘forcats’ in publications use:
+
+  Wickham H (2025). _forcats: Tools for Working with Categorical Variables (Factors)_.
+  doi:10.32614/CRAN.package.forcats <https://doi.org/10.32614/CRAN.package.forcats>. R package version 1.0.1,
+  <https://CRAN.R-project.org/package=forcats>.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {forcats: Tools for Working with Categorical Variables (Factors)},
+    author = {Hadley Wickham},
+    year = {2025},
+    note = {R package version 1.0.1},
+    url = {https://CRAN.R-project.org/package=forcats},
+    doi = {10.32614/CRAN.package.forcats},
+  }
+
+
+==================== purrr (v1.2.2) ====================
+
+To cite package ‘purrr’ in publications use:
+
+  Wickham H, Henry L (2026). _purrr: Functional Programming Tools_. doi:10.32614/CRAN.package.purrr
+  <https://doi.org/10.32614/CRAN.package.purrr>. R package version 1.2.2,
+  <https://CRAN.R-project.org/package=purrr>.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {purrr: Functional Programming Tools},
+    author = {Hadley Wickham and Lionel Henry},
+    year = {2026},
+    note = {R package version 1.2.2},
+    url = {https://CRAN.R-project.org/package=purrr},
+    doi = {10.32614/CRAN.package.purrr},
+  }
+
+
+==================== readxl (v1.5.0) ====================
+
+To cite package ‘readxl’ in publications use:
+
+  Wickham H, Bryan J (2026). _readxl: Read Excel Files_. doi:10.32614/CRAN.package.readxl
+  <https://doi.org/10.32614/CRAN.package.readxl>. R package version 1.5.0,
+  <https://CRAN.R-project.org/package=readxl>.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {readxl: Read Excel Files},
+    author = {Hadley Wickham and Jennifer Bryan},
+    year = {2026},
+    note = {R package version 1.5.0},
+    url = {https://CRAN.R-project.org/package=readxl},
+    doi = {10.32614/CRAN.package.readxl},
+  }
+
+
+==================== writexl (v2.0.0) ====================
+
+To cite package ‘writexl’ in publications use:
+
+  Ooms J, Denney B (2026). _writexl: Export Data Frames to Excel 'xlsx' Format_. doi:10.32614/CRAN.package.writexl
+  <https://doi.org/10.32614/CRAN.package.writexl>. R package version 2.0.0,
+  <https://CRAN.R-project.org/package=writexl>.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {writexl: Export Data Frames to Excel 'xlsx' Format},
+    author = {Jeroen Ooms and Bill Denney},
+    year = {2026},
+    note = {R package version 2.0.0},
+    url = {https://CRAN.R-project.org/package=writexl},
+    doi = {10.32614/CRAN.package.writexl},
+  }
+
+
+==================== patchwork (v1.3.2) ====================
+
+To cite package ‘patchwork’ in publications use:
+
+  Pedersen T (2025). _patchwork: The Composer of Plots_. doi:10.32614/CRAN.package.patchwork
+  <https://doi.org/10.32614/CRAN.package.patchwork>. R package version 1.3.2,
+  <https://CRAN.R-project.org/package=patchwork>.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {patchwork: The Composer of Plots},
+    author = {Thomas Lin Pedersen},
+    year = {2025},
+    note = {R package version 1.3.2},
+    url = {https://CRAN.R-project.org/package=patchwork},
+    doi = {10.32614/CRAN.package.patchwork},
+  }
+
+
+==================== cowplot (v1.2.0) ====================
+
+To cite package ‘cowplot’ in publications use:
+
+  Wilke C (2025). _cowplot: Streamlined Plot Theme and Plot Annotations for 'ggplot2'_.
+  doi:10.32614/CRAN.package.cowplot <https://doi.org/10.32614/CRAN.package.cowplot>. R package version 1.2.0,
+  <https://CRAN.R-project.org/package=cowplot>.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {cowplot: Streamlined Plot Theme and Plot Annotations for 'ggplot2'},
+    author = {Claus O. Wilke},
+    year = {2025},
+    note = {R package version 1.2.0},
+    url = {https://CRAN.R-project.org/package=cowplot},
+    doi = {10.32614/CRAN.package.cowplot},
+  }
+
+
+==================== ggpubr (v1.0.0) ====================
+
+To cite ggpubr in publications, please use:
+
+  Kassambara A (2026). ggpubr: 'ggplot2' Based Publication Ready Plots. R package version 0.6.3.999.
+  https://CRAN.R-project.org/package=ggpubr
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {ggpubr: 'ggplot2' Based Publication Ready Plots},
+    author = {Alboukadel Kassambara},
+    year = {2026},
+    note = {R package version 0.6.3.999},
+    url = {https://CRAN.R-project.org/package=ggpubr},
+  }
+
+Original author and maintainer: Alboukadel Kassambara. Contributor: Laszlo Erdey (Faculty of Economics and Business,
+University of Debrecen, Hungary).
+
+
+==================== ggsignif (v0.6.4) ====================
+
+To cite 'ggsignif' in publications use:
+
+  Ahlmann-Eltze, C., & Patil, I. (2021). ggsignif: R Package for Displaying Significance Brackets for 'ggplot2'.
+  PsyArxiv. doi:10.31234/osf.io/7awm6
+
+A BibTeX entry for LaTeX users is
+
+  @Article{,
+    title = {{ggsignif}: R Package for Displaying Significance Brackets for {'ggplot2'}},
+    author = {Ahlmann-Eltze Constantin and Indrajeet Patil},
+    year = {2021},
+    journal = {PsyArxiv},
+    url = {https://psyarxiv.com/7awm6},
+    doi = {10.31234/osf.io/7awm6},
+  }
+
+
+==================== here (v1.0.2) ====================
+
+To cite package ‘here’ in publications use:
+
+  Müller K (2025). _here: A Simpler Way to Find Your Files_. doi:10.32614/CRAN.package.here
+  <https://doi.org/10.32614/CRAN.package.here>. R package version 1.0.2, <https://CRAN.R-project.org/package=here>.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {here: A Simpler Way to Find Your Files},
+    author = {Kirill Müller},
+    year = {2025},
+    note = {R package version 1.0.2},
+    url = {https://CRAN.R-project.org/package=here},
+    doi = {10.32614/CRAN.package.here},
+  }
+
+
+==================== renv (v1.2.4) ====================
+
+To cite package ‘renv’ in publications use:
+
+  Ushey K, Wickham H (2026). _renv: Project Environments_. doi:10.32614/CRAN.package.renv
+  <https://doi.org/10.32614/CRAN.package.renv>. R package version 1.2.4, <https://CRAN.R-project.org/package=renv>.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {renv: Project Environments},
+    author = {Kevin Ushey and Hadley Wickham},
+    year = {2026},
+    note = {R package version 1.2.4},
+    url = {https://CRAN.R-project.org/package=renv},
+    doi = {10.32614/CRAN.package.renv},
+  }

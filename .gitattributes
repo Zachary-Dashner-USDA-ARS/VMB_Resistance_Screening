@@ -1,0 +1,25 @@
+# Normalise line endings to LF in the repository and on checkout, on every
+# platform. Without this, a contributor whose core.autocrlf is set to "true"
+# commits CRLF line endings, which produces spurious whole-file diffs and can
+# break shell scripts run inside the Docker image.
+* text=auto eol=lf
+
+# Binary files: never apply line-ending conversion or attempt to diff as text.
+# Git's auto-detection normally gets these right, but declaring them makes the
+# guarantee explicit for the data and results that reproduce the analysis.
+*.xlsx  binary
+*.xls   binary
+*.rds   binary
+*.RData binary
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.tif   binary
+*.tiff  binary
+
+# Treat these as text but mark them for sensible diffing.
+*.R     text diff=r
+*.Rmd   text diff=r
+*.md    text
+*.lock  text

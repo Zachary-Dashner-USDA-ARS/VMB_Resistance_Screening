@@ -1,0 +1,3102 @@
+---
+title: "Laboratory cohort assays for grapevine resistance to vine mealybug (*Planococcus ficus*)"
+subtitle: "Analysis accompanying Dashner et al. 2026, American Journal of Enology and Viticulture"
+output:
+  html_notebook:
+    toc: true
+    toc_float: true
+    code_folding: show
+editor_options:
+  chunk_output_type: inline
+---
+ 
+```{r setup, include=FALSE}
+# Locate the project root from this file, then run every chunk from the root so the relative paths below (data/, figures/, results/) resolve on any machine.
+if (!requireNamespace("here", quietly = TRUE)) {
+  stop("Package 'here' is required. Install it with install.packages('here').")
+}
+here::i_am("analysis/01_VMB_resistance_analysis.Rmd")
+knitr::opts_knit$set(root.dir = here::here())
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r create-output-dirs, include=FALSE}
+# Output directories are gitignored. Recreate directories on a fresh clone.
+for (d in c("figures", "results")) {
+  dir.create(here::here(d), showWarnings = FALSE, recursive = TRUE)
+}
+```
+
+# Packages and data
+
+```{r}
+# install.packages(c(
+#   "ggtext", "tidyverse", "lme4", "emmeans", "multcomp", "DHARMa", "binom",
+#   "lmerTest", "readxl", "writexl", "dplyr", "rstatix", "forcats", "ggplot2",
+#   "gridExtra", "ggpubr", "tidyr", "purrr", "ggsignif", "glmmTMB", "nortest",
+#   "car", "DescTools", "xlsx", "multcompView", "FSA", "mgcv", "nparcomp",
+#   "patchwork", "cowplot", "simr", "devtools"
+# ))
+
+#install.packages("glmmTMB", type = "source")
+
+
+library(ggtext)
+library(tidyverse)
+library(lme4)
+library(simr)
+library(emmeans)
+library(multcomp)
+library(DHARMa)
+library(binom)
+library(lmerTest)
+library(readxl)
+library(writexl)
+library(dplyr)
+library(rstatix)
+library(forcats)
+library(ggplot2)
+library(gridExtra)
+library(ggpubr)
+library(tidyr)
+library(purrr)
+library(ggsignif)
+library(glmmTMB)
+library(nortest)
+library(car)
+library(DescTools)
+library(multcompView)
+library(FSA)   # for dunnTest
+library(mgcv)
+library(nparcomp) # implements a rank‑based Dunnett test.
+library(patchwork)
+library(cowplot)
+library(dplyr)
+library(devtools)
+
+
+# Theme for figures to match AJEV
+theme_pub <- theme_classic(base_size = 14) +
+  theme(
+    axis.title = element_text(size = 14),
+    axis.text  = element_text(size = 12),
+    plot.tag   = element_text(size = 16, face = "bold"),
+    legend.position = "none",
+    plot.margin = margin(5, 5, 5, 5)
+  )
+
+#accession color palette 
+acc_palette <- c(
+  "Freedom"       = "#476F84FF",
+  "Barrett Mn-1"  = "#F0A430FF"
+)
+
+
+## Functions 
+
+#Legend
+g_legend <- function(a.gplot) {
+  tmp <- ggplot_gtable(ggplot_build(a.gplot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  return(legend)
+}
+
+
+# Saving figures for AJEV 
+W_SINGLE <- 3.5      # single-column width  (inches)
+W_DOUBLE <- 7.25     # double-column width  (inches)
+DPI_FIG  <- 300      # raster resolution for line art / combination figures
+
+#' Save a figure as both vector PDF and raster PNG
+save_fig <- function(plot, stem, height, width = W_DOUBLE) {
+  stopifnot(inherits(plot, c("ggplot", "patchwork")), is.character(stem))
+  ggsave(here::here("figures", paste0(stem, ".pdf")), plot,
+         device = cairo_pdf, width = width, height = height,
+    bg = "white")
+  ggsave(here::here("figures", paste0(stem, ".png")), plot, type = "cairo",
+         width = width, height = height, dpi = DPI_FIG)
+  message(sprintf("saved %s  (%.2f x %.2f in)", stem, width, height,
+    bg = "white"))
+  invisible(plot)
+}
+
+#Files 
+
+VMB_Sizes               <- read_excel("data/processed/AJEV_VMB_AllData.xlsx", sheet = "VMB_Sizes")
+VMB9_combined_df        <- read_excel("data/processed/AJEV_VMB_AllData.xlsx", sheet = "VMB9_combined_df")
+VMB_Crawler_combined_df <- read_excel("data/processed/AJEV_VMB_AllData.xlsx", sheet = "VMB_Crawler_combined_df")
+VMB8                    <- read_excel("data/processed/AJEV_VMB_AllData.xlsx", sheet = "VMB8")
+VMB7_final              <- read_excel("data/processed/AJEV_VMB_AllData.xlsx", sheet = "VMB7_final")
+VMB_choice              <- read_excel("data/processed/AJEV_VMB_AllData.xlsx", sheet = "VMB_choice")
+
+
+```
+
+# R package citations
+```{r}
+devtools::session_info()
+citation("ggplot2")
+packageVersion("ggplot2")
+
+version$version.string
+
+
+```
+
+# Figure 1
+## Figure 1A: Twelve-Day Assay Diversity Screen for Area
+```{r}
+
+#Reshape data to combine Size columns into a single column `Size` and create a new column `Size_Rep`
+VMB9_combined_area_df <- VMB9_combined_df %>%
+  pivot_longer (cols = starts_with("Size"),
+               names_to = "Size_Rep",
+               values_to = "Size") %>%
+  mutate(Size_Rep = gsub("Size ", "", Size_Rep))
+
+VMB9_combined_area_df <- VMB9_combined_area_df %>% rename_at('Size_Rep', ~'Insect_Rep')
+
+# Create a join based on the "Size" column from VMB8_initial_df and "Size Category" from VMB_Sizes
+VMB9_combined_area_df_joined <- left_join(VMB9_combined_area_df, VMB_Sizes, by = c("Size" = "Size Category"))
+
+#Save columns in correct format
+VMB9_combined_area_df_joined <- VMB9_combined_area_df_joined %>%
+  mutate(
+    # Convert columns 1, 2, 3, 4, and 6 to factors
+    Accession = factor(Accession),
+    Rep = factor(Rep),
+    Obeserver = factor(Obeserver),
+    Time = factor(Time),
+    Species  = factor(Species),
+    Notes  = factor(Notes),
+)
+
+# Compute cage-level initial mean size
+cage_initial <- VMB9_combined_area_df_joined %>%
+  filter(Time == "Initial") %>%
+  group_by(Accession, Rep) %>%
+  summarise(InitialMean = mean(Area, na.rm = TRUE))
+
+# Merge into final dataframe
+VMB_assay9_Area_df <- VMB9_combined_area_df_joined %>%
+  filter(Time == "Final") %>%
+  left_join(cage_initial, by = c("Accession", "Rep"))
+
+
+VMB_assay9_Area_df <- VMB_assay9_Area_df %>%
+  filter(!is.na(Area), !is.na(InitialMean)) %>%
+  mutate(cageID = droplevels(interaction(Accession, Rep, drop = TRUE)))
+
+#Make Freedom the reference
+VMB_assay9_Area_df$Accession <- relevel(VMB_assay9_Area_df$Accession, ref = "Freedom")
+
+# Fit mixed model of area with initial area with Freedom as the reference
+model_area_VMB9_initial <- lmer(
+  Area ~ InitialMean + Accession + (1 | cageID),
+  data = VMB_assay9_Area_df
+)
+
+#DHARMa to check model fit
+simulateResiduals(model_area_VMB9_initial) %>% plot()
+
+
+summary(model_area_VMB9_initial)
+car::Anova(model_area_VMB9_initial, type = 2)
+# Analysis of Deviance Table (Type II Wald chisquare tests)
+# 
+# Response: Area
+#              Chisq Df Pr(>Chisq)    
+# InitialMean 13.383  1   0.000254 ***
+# Accession   55.128 14  8.229e-07 ***
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+  # Results (Initial means): "While cages that began assays with larger mealybugs tended to produce larger mealybugs at the end of tests (χ² = 13.38, p < 0.001), differences in VMB size at the end of tests were detectable even after accounting for initial size. "  
+  # Results (Accession): "There was a significant effect of accession on the size of VMB recovered at the end of assays (χ² = 55.13, p < 0.001)... "
+  
+
+#Get adjusted means from the LMM
+emm <- emmeans(model_area_VMB9_initial, ~ Accession)
+emm_df <- as.data.frame(emm)
+
+#Generate compact letter display
+cld_out <- cld(emm, adjust = "bonferroni", Letters = base::letters)
+
+letters_df <- cld_out %>%
+  as.data.frame() %>%
+  mutate(.group = as.character(.group)) %>%
+  select(Accession, Letters = .group)
+
+colnames(letters_df)[2] <- "Letters"
+
+VMB_assay9_lmer_df <- left_join(emm_df, letters_df, by = "Accession")
+
+#Add species information for fill colors
+species_lookup <- VMB_assay9_Area_df %>%
+  distinct(Accession, Species)
+
+VMB_assay9_lmer_df <- left_join(VMB_assay9_lmer_df, species_lookup, by = "Accession")
+
+#Accession levels grouped alphabetically within each Species
+VMB_assay9_lmer_df <- VMB_assay9_lmer_df %>%
+  arrange(Species, Accession) %>%
+  mutate(
+    Accession = factor(Accession,
+                       levels = unique(Accession))
+  )
+
+
+range(VMB_assay9_lmer_df$emmean)
+  # Results: "...and final body area varied approximately two‑fold across the panel, from 1.66 mm² on Barrett Mn‑1 to 3.42 mm² on b 45‑35 M59 (Figure 1A)."
+
+
+summary(model_area_VMB9_initial)
+multcomp::cld(emmeans::emmeans(model_area_VMB9_initial, ~ Accession),
+              adjust = "bonferroni", Letters = letters)
+# Results: "...only Barrett Mn‑1 (−1.314, p < 0.001) remained significant after Bonferroni correction for multiple comparisons."
+
+#Plot adjusted means with letters
+VMB_assay9_Final_Area_letters <- ggplot(VMB_assay9_lmer_df, aes(x = Accession, y = emmean, fill = Species)) +
+  geom_col(color = "black", width = 0.7) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.2) +
+  geom_text(aes(label = Letters, y = upper.CL + 0.3), size = 5) +
+  scale_fill_manual(values = c(
+    "Rootstock"    = "#476F84FF",
+    "M. rotundifolia" = "#72874EFF",
+    "V. acerifolia"= "#913914FF",
+    "V. aestivalis"= "#585854FF",
+    "V. champinii" = "#F0A430FF",
+    "V. cinerea"   = "#205F4BFF",
+    "V. tiliifolia"= "#800000FF",
+    "V. treleasei" = "#F2DD78FF"
+  )) +
+  labs(
+    title = "Assay #9: Adjusted VMB Area (12 Days)",
+    x = NULL,
+    y = expression("Adjusted VMB Area (mm"^2*")")
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(size = 12, angle = -45, hjust = 0, vjust = 0.5),
+    plot.margin = margin(t = 1, r = 1, b = 1.5, l = 1, unit = "cm"),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+VMB_assay9_Final_Area_letters
+
+
+#Fold-size difference of VMB on Freedom compared to those on Barrett Mn-1?
+freedom_SIZE <- emm_df$emmean[emm_df$Accession == "Freedom"]
+barrett_SIZE <- emm_df$emmean[emm_df$Accession == "Barrett Mn-1"]
+
+barrett_SIZE /freedom_SIZE
+# 0.5581511
+#Results: "Specifically, mealybugs recovered from Barrett Mn‑1 were 44% smaller than those recovered from the reference susceptible host Freedom (p < 0.001)."
+
+#Did VMB grow during the course of the assay?
+  
+     VMB_assay9_Area_cageAVG_df <- VMB9_combined_area_df_joined %>%
+  group_by(Accession, Rep, Time) %>%
+  summarise(MeanArea = mean(Area, na.rm = TRUE), .groups = "drop") %>%
+  tidyr::pivot_wider(
+    names_from = Time,
+    values_from = MeanArea,
+    names_prefix = "",
+    values_fill = NA
+  ) %>%
+  mutate(Growth = Final - Initial)
+ 
+      
+VMB9_growth_tests <- VMB_assay9_Area_cageAVG_df %>%
+  group_by(Accession) %>%
+  summarise(
+    p_value = wilcox.test(na.omit(Growth), mu = 0)$p.value,
+    avg_growth = mean(Growth, na.rm = TRUE),
+    n = sum(!is.na(Growth))
+  ) %>%
+  mutate(
+    p_adj = p.adjust(p_value, method = "fdr")
+  )
+
+      
+VMB9_growth_tests
+#Results: "Importantly, cage‑level comparisons of initial and final size showed that mealybugs exhibited growth on all accessions (Wilcoxon signed‑rank tests, all adjusted p < 0.05), confirming that they fed during the assay even on hosts that reduced final size."
+
+```
+
+## Figure 1B: Twelve-Day Assay Diversity Screen for Recovery
+```{r}
+
+#Save columns in correct format
+VMB9_combined_df <- VMB9_combined_df %>%
+  mutate(
+    # Convert columns 1, 2, 3, 4, and 6 to factors
+    Accession = factor(Accession),
+    Rep = factor(Rep),
+    Obeserver = factor(Obeserver),
+    Time = factor(Time),
+    Species  = factor(Species),
+    Notes  = factor(Notes),
+)
+
+# Filter the data frame based on the "Exp_stop" column
+VMB9_Recovery_df <- VMB9_combined_df %>%
+  filter(Time == "Final")
+
+# #Make Freedom the first and the control by default
+ VMB9_Recovery_df$Accession <- fct_relevel(VMB9_Recovery_df$Accession, "Freedom")
+# #check reorder
+# levels(VMB9_Recovery_df_sorted$Accession)
+
+#Accession levels grouped alphabetically within each Species
+VMB9_Recovery_df <- VMB9_Recovery_df %>%
+  arrange(Species, Accession) %>%
+  mutate(
+    Accession = factor(Accession, 
+                       levels = unique(Accession))
+  )
+
+VMB9_Recovery_df <- VMB9_Recovery_df %>%
+  rename_with(~ gsub(" ", "_", .x)) %>%
+  mutate(Total_recovered = rowSums(select(., Size_1:Size_5) != "", na.rm = TRUE))
+
+#Proportion Recovered
+VMB9_Recovery_df$Prop_recovered <-(VMB9_Recovery_df$Total_recovered/5)*100
+
+#Remove outliers
+VMB9_Recovery_df <- subset(VMB9_Recovery_df, Prop_recovered != 0) 
+
+VMB9_recovery_plot <- ggplot(
+  VMB9_Recovery_df,
+  aes(x = Accession, y = Prop_recovered, fill = Species)
+) + stat_summary( fun = mean, geom = "col", color = "black", width = 0.7, alpha = 0.8 ) +  # Summary bars (mean recovery per accession)
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2, color = "black") +   # Error bars (mean ± SE)
+  geom_jitter(size = 1.5, alpha = 0.9, color = "black", width = 0.25, height = 0 ) + # Raw data points (jittered)
+  scale_fill_manual(values = c(       # Species color palette
+    "M. rotundifolia" = "#72874EFF",
+    "Rootstock"       = "#476F84FF",
+    "V. acerifolia"   = "#913914FF",
+    "V. aestivalis"   = "#585854FF",
+    "V. champinii"    = "#F0A430FF",
+    "V. cinerea"      = "#205F4BFF",
+    "V. tiliifolia"   = "#800000FF",
+    "V. treleasei"    = "#F2DD78FF"
+  )) +
+   labs(
+    title = "Assay #9: VMB Recovery (12-Days)", x = NULL, y = "VMB recovery (%)") +
+  theme_classic() +
+  theme( axis.text.x = element_text(size = 12, angle = -45, hjust = 0, vjust = 0.5),
+    plot.margin = margin(t = 1, r = 1, b = 1.5, l = 1, unit = "cm"),
+    plot.title = element_text(hjust = 0.5) ) +
+   ylim(0, 100)
+
+VMB9_recovery_plot
+
+# Fit mixed model of recovery with Freedom as the reference for VMB9 (Screen in the `15 accessions)
+model_recovery_VMB9 <- glm(
+  cbind(Total_recovered, 5 - Total_recovered) ~ Accession, 
+  family = binomial,
+  data = VMB9_Recovery_df
+)
+
+#DHARMa to check model fit
+simulateResiduals(model_recovery_VMB9) %>% plot()
+summary(model_recovery_VMB9)
+
+
+emm_rec <- emmeans(model_recovery_VMB9, ~ Accession, type = "response")
+
+emm_rec
+#Results: "Estimated marginal means indicated that recovery of VMB during 12-day assays varied modestly among accessions, ranging from 72.5% on Barrett-Mn‑1 to 97.5% on TX2006‑62‑1 (Figure 1B)."
+
+
+dunnett_df <- contrast(
+  emm_rec,
+  method = "trt.vs.ctrl",
+  ref = "Freedom",
+  adjust = "dunnett"
+) %>% 
+  as.data.frame()
+
+dunnett_df
+#Results: "After correction for multiple testing, no accession differed significantly from Freedom (all adjusted p > 0.05)." 
+
+```
+
+## Figure 1C: Higher power experiments merged for growth 
+```{r}
+#Reduced VMB9 
+VMB_assay9_Area_Reduced <- VMB_assay9_Area_df %>%
+  filter(Accession %in% c("Barrett Mn-1", "Freedom" ))%>%
+  droplevels()
+
+VMB9_clean <- VMB_assay9_Area_Reduced %>%
+  select(
+    Accession = Accession,
+    Rep  = Rep,
+    Area      = Area,
+    InitialMean = InitialMean
+  ) %>%
+  mutate(experiment = "VMB9")
+
+
+#Drop old area
+VMB8 <- subset(VMB8, select = -c(Area))
+
+# Size category to area conversion
+VMB8 <- VMB8 %>%
+  left_join(VMB_Sizes, by = c("Size_chr" = "Size Category")) %>%
+  filter(Plant_Name %in% c("Freedom", "Barrett Mn-1")) %>%
+  mutate(
+    Plant_Name = factor(Plant_Name),
+    Plant_Rep  = factor(Plant_Rep),
+    Time       = factor(Time),
+    Accession = relevel(Plant_Name, ref = "Freedom")
+  )%>%
+  droplevels()
+
+# Compute cage-level initial means
+cage_initial <- VMB8 %>%
+  filter(Time == "Initial") %>%
+  group_by(Plant_Name, Plant_Rep) %>%
+  summarise(InitialMean = mean(Area, na.rm = TRUE), .groups = "drop")
+
+
+# Attach initial means to final rows only
+VMB8_final <- VMB8 %>%
+  filter(Time == "Final") %>%
+  left_join(cage_initial, by = c("Plant_Name", "Plant_Rep")) %>%
+  mutate(Accession = relevel(Plant_Name, ref = "Freedom"))
+
+
+VMB8_clean <- VMB8_final %>%
+  filter(Time == "Final") %>%   #Keep only final measurements
+  select(
+    Accession = Accession,
+    Rep  = Plant_Rep,
+    Area      = Area,
+    InitialMean = InitialMean
+  ) %>%
+  mutate(experiment = "VMB8")
+
+cages_8_9 <- bind_rows(VMB8_clean, VMB9_clean)
+
+
+cages_8_9 <- cages_8_9 %>%
+  filter(!is.na(Area), !is.na(InitialMean)) %>%
+  mutate(cageID = droplevels(interaction(Accession, Rep, drop = TRUE)))
+
+#Create a unique ID for cage
+cages_8_9$cageID <- interaction(
+  cages_8_9$experiment,
+  cages_8_9$Rep,
+  cages_8_9$Accession,
+  drop = TRUE
+)
+
+
+sum(!is.na(cages_8_9$Area))
+
+#Model for area in VMB9 (Screen of 15 accessions)
+m_area_interaction <- lmer(
+  Area ~ InitialMean + Accession * experiment + #Experiment included as a fixed effect because there is a significant interaction between accession and test date.
+    (1 | cageID),
+  data = cages_8_9
+)
+
+
+simulateResiduals(m_area_interaction) %>% plot()
+summary(m_area_interaction)
+#Results: "While size of VMB entering tests was positively associated with VMB size at end of tests (t = 2.81, p = 0.008), effects of accession on VMB size were detectable even after accounting for initial size."
+
+m_no_init <- update(m_area_interaction, . ~ . - InitialMean)
+anova(m_no_init, m_area_interaction)
+#Results: "Although the accession × test date interaction was significant (t = –2.20, p = 0.034), including initial VMB size improved model fit (χ² = 7.94, p = 0.005), indicating that experiment‑level differences in starting size contributed to the accession × test date interaction coefficient."
+
+tapply(cages_8_9$InitialMean, cages_8_9$experiment, mean, na.rm = TRUE)
+
+
+emm_VMB89_area1 <- emmeans(
+  m_area_interaction,
+  ~ Accession ,
+  type = "response"
+)
+
+emm_VMB89_area1
+
+
+emm_VMB89_area1_df <- as.data.frame(emm_VMB89_area1)
+
+#Plotting
+ggplot(emm_VMB89_area1_df, aes(x = Accession, y = emmean, fill = Accession)) +
+  geom_col(width = 0.6, alpha = 0.7) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.15) +
+  scale_fill_manual(values = c("Freedom" = "#0072B2",
+                               "Barrett Mn-1" = "#D55E00")) +
+  labs( title = NULL, x = NULL, y = "Predicted final area (mm²)") +
+  theme_classic(base_size = 14) +
+  theme(legend.position = "none")
+
+
+#Pairwise comparison
+pairs(emm_VMB89_area1)
+#Results: "As observed in the initial diversity screen, the additional 12-day no-choice assays combined with the initial data confirmed that mealybugs developing on Barrett Mn‑1 were 48% smaller than those on Freedom (estimate = −0.95 ± 0.16 SE, p < 0.001, averaged across experiments) (Figure 1C)."
+
+freedom_SIZE2 <- emm_VMB89_area1_df$emmean[emm_VMB89_area1_df$Accession == "Freedom"]
+barrett_SIZE2 <- emm_VMB89_area1_df$emmean[emm_VMB89_area1_df$Accession == "Barrett Mn-1"]
+
+barrett_SIZE2 /freedom_SIZE2
+
+1-(barrett_SIZE2 /freedom_SIZE2)
+# Results: supplies ONLY the "48% smaller" figure in the Figure 1C sentence. The
+# accompanying estimate is annotated on pairs(emm_VMB89_area1) above
+# (-0.95 +/- 0.16 SE, p < 0.001, averaged across experiments), which is the
+# wording the manuscript uses.
+
+
+print(lme4::VarCorr(m_area_interaction), comp = "Variance")
+# Results: "Random variation among cages was small for VMB size (cage variance = 0.05 versus a residual variance of 0.74)"
+```
+
+## Figure 1D: Higher power experiments merged for recovery 
+```{r}
+#Fixing issue caused by two columns (Accession and accession). Previously caused drop in cages from 88 to 52.
+
+#Reduced VMB9 
+VMB_assay9_Area_Reduced <- VMB_assay9_Area_df %>%
+  filter(Accession %in% c("Barrett Mn-1", "Freedom" ))%>%
+  droplevels()
+
+VMB9_clean <- VMB_assay9_Area_Reduced %>%
+  select(
+    Accession = Accession,
+    Rep  = Rep,
+    Area      = Area,
+    InitialMean = InitialMean
+  ) %>%
+  mutate(experiment = "VMB9")
+
+VMB8_clean <- VMB8_final %>%
+  filter(Time == "Final") %>%   # keep only final measurements
+  select(
+    Accession = Accession,
+    Rep  = Plant_Rep,
+    Area      = Area,
+    InitialMean = InitialMean
+  ) %>%
+  mutate(experiment = "VMB8")
+
+cages_8_9 <- bind_rows(VMB8_clean, VMB9_clean)
+
+
+#Update dataframe to work with binomial
+baseline <- 5   # baseline of 5 introduced in this assay
+
+cages_8_9_recovery <- cages_8_9 %>%
+  group_by(Accession, Rep, experiment) %>%
+  summarise(
+    survived = sum(!is.na(Area)),
+    died     = baseline - survived,
+    initial_mean = unique(InitialMean),
+    .groups = "drop"
+  )
+
+#Create a unique ID for cage
+cages_8_9_recovery$cageID <- interaction(
+  cages_8_9_recovery$experiment,
+  cages_8_9_recovery$Rep,
+  cages_8_9_recovery$Accession,
+  drop = TRUE
+)
+
+#Reduced VMB7 (VMB7 lacks initial size info)
+VMB7_final <- VMB7_final %>%
+  filter(Plant_name %in% c("Barrett Mn-1", "Freedom" ))%>%
+  droplevels()
+
+#Update dataframe to work with binomial
+baseline <- 6   # VMB7 has 6 introduced instead of 5.
+
+VMB7_recovery <- VMB7_final %>%
+  group_by(Plant_name, Plant_Rep) %>%
+  summarise(
+    survived = sum(!is.na(Size)),
+    died     = baseline - survived,
+    accession = unique(Plant_name),
+    .groups = "drop"
+  )
+
+VMB7_clean <- VMB7_recovery %>%
+  select(
+    Accession = Plant_name,
+    Rep  = Plant_Rep,
+    survived      = survived,
+    died      = died
+  ) %>%
+  mutate(experiment = "VMB7")
+
+VMB7_clean$Accession <- as.factor(VMB7_clean$Accession)
+VMB7_clean$Rep <- as.factor(VMB7_clean$Rep)
+
+cages_7_8_9_RECOVERY <- bind_rows(
+  dplyr::select(cages_8_9_recovery, -dplyr::any_of("accession")),
+  VMB7_clean
+)
+
+# Ensuring that Accession is in all three experiments (VMB7-VMB9)
+stopifnot(
+  nrow(cages_7_8_9_RECOVERY) == 88,
+  !any(is.na(cages_7_8_9_RECOVERY$Accession)),
+  setequal(unique(as.character(cages_7_8_9_RECOVERY$experiment)),
+           c("VMB7", "VMB8", "VMB9"))
+)
+cages_7_8_9_RECOVERY$experiment <- as.factor(cages_7_8_9_RECOVERY$experiment)
+
+
+#Create a unique ID for cage
+cages_7_8_9_RECOVERY$cageID <- interaction(
+  cages_7_8_9_RECOVERY$experiment,
+  cages_7_8_9_RECOVERY$Rep,
+  cages_7_8_9_RECOVERY$Accession,
+  drop = TRUE
+)
+
+
+recovery_789 <- cages_7_8_9_RECOVERY |>
+  dplyr::mutate(
+    Accession  = factor(as.character(Accession),
+                        levels = c("Freedom", "Barrett Mn-1")),
+    experiment = droplevels(factor(experiment)),
+    n_total    = survived + died          # 6 for VMB7, 5 for VMB8/VMB9
+  )
+
+# Ensuring that Accession is in all three experiments (VMB7-VMB9)
+stopifnot(
+  !anyNA(recovery_789$Accession),
+  !anyNA(recovery_789$experiment),
+  all(recovery_789$survived <= recovery_789$n_total),
+  dplyr::n_distinct(recovery_789$cageID) == nrow(recovery_789)
+)
+
+# Confirm that per-experiment starting VMB count survived merge (VMB7= 6, VMB8= 5, VMB9= 5)
+recovery_789 |>
+  dplyr::group_by(experiment) |>
+  dplyr::summarise(cages = dplyr::n(),
+                   insects_per_cage = paste(sort(unique(n_total)), collapse = ", "),
+                   .groups = "drop")
+
+## Models
+#Initial mealybug size not included for recovery b/c it had no sig. association (LRT chi2 = 0.017, df = 1, p = 0.896). Dropping term also allows for VMB7 to be added (adds 36 cages)
+m_recovery_null_789 <- lme4::glmer(
+  cbind(survived, died) ~ Accession + (1 | cageID),
+  family = binomial, data = recovery_789
+)
+
+#Model with no interaction term
+m_recovery_main_789 <- lme4::glmer(
+  cbind(survived, died) ~ Accession + experiment + (1 | cageID),
+  family = binomial, data = recovery_789
+)
+
+#Model with interaction term
+m_recovery_int_789 <- lme4::glmer(
+  cbind(survived, died) ~ Accession * experiment + (1 | cageID),
+  family = binomial, data = recovery_789
+)
+
+# Checking that model used all rows
+stopifnot(nobs(m_recovery_main_789) == nrow(recovery_789))
+
+summary(m_recovery_main_789)
+anova(m_recovery_null_789, m_recovery_main_789)   # experiment main effect
+# Chisq = 29.789, Df = 2, p = 3.4e-07 (baseline recovery differs by run)
+
+anova(m_recovery_main_789, m_recovery_int_789)    # accession x experiment
+# Chisq = 0.6803, Df = 2, p = 0.7117  (No effect of experiment)
+  # Results: "Recovery of VMB was 41.2% lower on Barrett Mn‑1 than on Freedom (81.2% versus 47.8% recovery; odds ratio 4.73, 95% CI 2.89 to 7.74; z = −6.20, p < 0.001) (Figure 1D) with no accession‑by‑experiment interaction (χ² = 0.68, df = 2, p = 0.71)."
+
+#QC
+DHARMa::simulateResiduals(m_recovery_main_789) |> plot()
+
+
+## Estimates reported in the manuscript
+
+emm_VMB789_recovery <- emmeans::emmeans(m_recovery_main_789, ~ Accession,
+                                        type = "response")
+emm_VMB789_recovery
+#  Accession     prob     SE  df asymp.LCL asymp.UCL
+#  Freedom      0.812 0.0318 Inf     0.742     0.867
+#  Barrett Mn-1 0.478 0.0436 Inf     0.394     0.563
+
+pairs(emm_VMB789_recovery, infer = TRUE)
+ # contrast                 odds.ratio   SE  df asymp.LCL asymp.UCL null z.ratio p.value
+ # Freedom / (Barrett Mn-1)       4.73 1.19 Inf      2.89      7.74    1   6.195 <0.0001
+    # odds ratio 4.73 (95% CI 2.89-7.74), z = 6.195, p < 0.0001
+
+  # Results: "Recovery of VMB was 41.2% lower on Barrett Mn‑1 than on Freedom (81.2% versus 47.8% recovery; odds ratio 4.73, 95% CI 2.89 to 7.74; z = −6.20, p < 0.001) (Figure 1D) with no accession‑by‑experiment interaction (χ² = 0.68, df = 2, p = 0.71)."
+
+emm_VMB789_recovery_df  <- as.data.frame(emm_VMB789_recovery)
+emm_VMB789_recovery_pct <- emm_VMB789_recovery_df |>
+  dplyr::mutate(dplyr::across(c(prob, SE, asymp.LCL, asymp.UCL), ~ .x * 100))
+
+# Recovery varies across experiments 63.1%-93%. Include a susceptible control in each experiment to compare
+emmeans::emmeans(m_recovery_main_789, ~ Accession | experiment,
+                 type = "response")
+
+# Freedom: 63.1% (VMB7), 78.1% (VMB8), 93.0% (VMB9)
+freedom_RECOVERY <- emm_VMB789_recovery_df$prob[
+  emm_VMB789_recovery_df$Accession == "Freedom"]
+barrett_RECOVERY <- emm_VMB789_recovery_df$prob[
+  emm_VMB789_recovery_df$Accession == "Barrett Mn-1"]
+
+100 * (freedom_RECOVERY - barrett_RECOVERY) / freedom_RECOVERY
+    # 41.18545
+ # Results: "Recovery of VMB was 41.2% lower on Barrett Mn‑1 than on Freedom (81.2% versus 47.8% recovery; odds ratio 4.73, 95% CI 2.89 to 7.74; z = −6.20, p < 0.001) (Figure 1D) with no accession‑by‑experiment interaction (χ² = 0.68, df = 2, p = 0.71)."
+
+cat(sprintf(
+"\n--- FIGURE 1D / recovery ----------------------------------------------
+Freedom      : %.1f%%
+Barrett Mn-1 : %.1f%%
+Reduction    : %.1f%%
+Odds ratio   : %.2f
+Cages        : %d across %d experiments
+Insects      : %d recovered of %d introduced
+-----------------------------------------------------------------------\n",
+  100 * freedom_RECOVERY, 100 * barrett_RECOVERY,
+  100 * (freedom_RECOVERY - barrett_RECOVERY) / freedom_RECOVERY,
+  (freedom_RECOVERY / (1 - freedom_RECOVERY)) /
+    (barrett_RECOVERY / (1 - barrett_RECOVERY)),
+  nrow(recovery_789), nlevels(recovery_789$experiment),
+  sum(recovery_789$survived), sum(recovery_789$n_total)))
+
+#Result: "Mealybug body area varied approximately two fold across accessions, and Barrett Mn 1 was the only accession on which growth was significantly reduced relative to Freedom after correction for multiple comparisons. In replicated assays, mealybugs on Barrett Mn 1 were 48% smaller and recovery was 41.2% lower than on Freedom." 
+    # Freedom      : 81.2%
+    # Barrett Mn-1 : 47.8%
+    # Reduction    : 41.2%
+    # Odds ratio   : 4.73
+    # Cages        : 88 across 3 experiments
+    # Insects      : 271 recovered of 476 introduced
+
+## Plot
+
+ggplot(emm_VMB789_recovery_pct,
+             aes(x = Accession, y = prob, fill = Accession)) +
+  geom_col(width = 0.7, color = "black") +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.15) +
+  scale_fill_manual(values = acc_palette) +
+  labs(tag = "D", y = "Recovered (%)", x = NULL) +
+  ylim(0, 100) +
+  theme_pub +
+  geom_signif(
+    comparisons = list(c("Freedom", "Barrett Mn-1")),
+    annotations = "***",          # p < 0.0001
+    y_position  = 95,
+    tip_length  = 0.02,
+    textsize    = 5
+  )
+
+```
+
+### Figure 1ABCD
+```{r}
+##Define a shared theme + color palette
+
+species_palette <- c(
+  "M. rotundifolia" = "#F0A430FF",
+  "Rootstock"       = "#476F84FF",
+  "V. acerifolia"   = "#913914FF",
+  "V. aestivalis"   = "#585854FF",
+  "V. champinii"    = "#72874EFF",
+  "V. cinerea"      = "#205F4BFF",
+  "V. tiliifolia"   = "#800000FF",
+  "V. treleasei"    = "#F2DD78FF"
+)
+
+
+theme_pub <- theme_classic(base_size = 10) +
+  theme(
+    axis.title = element_text(size = 10),
+    axis.text  = element_text(size = 10),
+    plot.tag   = element_text(size = 12, face = "bold"),
+    legend.position = "none",
+    plot.margin = margin(5, 5, 5, 5)
+  )
+
+
+Fig1A <- ggplot(VMB_assay9_lmer_df,
+       aes(x = Accession, y = emmean, fill = Species)) +
+  geom_col(color = "black", width = 0.7) +
+  scale_fill_manual(values = species_palette) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.2) +
+  geom_text(aes(label = Letters, y = upper.CL + 0.4), size = 4) +
+  labs(tag = "A", y = "Final area (mm²)", x = NULL) +
+  coord_flip() +
+  scale_y_reverse() +
+  theme_pub +
+  theme(
+    axis.text.y  = element_text(size = 11),
+    axis.ticks.y = element_blank(),
+  )
+
+
+unique(VMB_assay9_lmer_df$Species)
+
+
+Fig1B <- ggplot(
+  VMB9_Recovery_df,
+  aes(x = Accession, y = Prop_recovered, fill = Species)
+) +
+  stat_summary(fun = mean, geom = "col", color = "black", width = 0.7) +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2) +
+  scale_fill_manual(values = species_palette)  +
+  labs(tag = "B", y = "Recovered (%)", x = NULL) +
+  coord_flip() +
+ theme_pub +
+  theme(
+    axis.text.y = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = "none",
+    plot.margin = margin(t = 5, r = 5, b = 5, l = 0),
+  )
+
+
+Fig1C <- ggplot(emm_VMB89_area1_df,
+       aes(x = Accession, y = emmean, fill = Accession)) +
+  geom_col(width = 0.7, color = "black") +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.15) +
+  scale_fill_manual(values = acc_palette) +
+  labs(tag = "C", y = "Final area (mm²)", x = NULL) +
+  theme_pub +
+  geom_signif(
+    comparisons = list(c("Freedom", "Barrett Mn-1")),
+    annotations = "***",   # p < 0.0001
+    y_position = max(emm_VMB89_area1_df$upper.CL) * 1.05,
+    tip_length = 0.02,
+    textsize = 5
+  )+ylim(0,2.5)
+
+
+Fig1D <- ggplot(emm_VMB789_recovery_pct,
+             aes(x = Accession, y = prob, fill = Accession)) +
+  geom_col(width = 0.7, color = "black") +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.15) +
+  scale_fill_manual(values = acc_palette) +
+  labs(tag = "D", y = "Recovered (%)", x = NULL) +
+  ylim(0, 100) +
+  theme_pub +
+  geom_signif(
+    comparisons = list(c("Freedom", "Barrett Mn-1")),
+    annotations = "***",          # p < 0.0001
+    y_position  = 95,
+    tip_length  = 0.02,
+    textsize    = 5
+  )
+
+
+#Make species italicized
+species_labels <- c(
+  "Rootstock" = "Rootstock",          # plain
+  "M. rotundifolia"          = "<i>M. rotundifolia</i>",
+  "V. acerifolia"            = "<i>V. acerifolia</i>",
+  "V. aestivalis"            = "<i>V. aestivalis</i>",
+  "V. champinii"             = "<i>V. champinii</i>",
+  "V. cinerea"               = "<i>V. cinerea</i>",
+  "V. tiliifolia"            = "<i>V. tiliifolia</i>",
+  "V. treleasei"             = "<i>V. treleasei</i>"
+)
+
+#Dummy plot
+legend_dummy <- ggplot(VMB_assay9_lmer_df,
+       aes(x = Species, fill = Species)) +
+  geom_bar() +
+  scale_fill_manual(values = species_palette,
+                    labels = species_labels) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.text = element_markdown(size = 10)
+  )
+
+
+legend <- cowplot::get_legend(legend_dummy)
+
+
+layout <- rbind(
+  c(1, 2),   # row 1: P1, P2
+  c(3, 4),   # row 2: P3, P4
+  c(5, 5)    # row 3: legend spanning both columns
+)
+
+Final_4panel_figure <- grid.arrange(
+  grobs = list(Fig1A, Fig1B, Fig1C, Fig1D, legend),
+  layout_matrix = layout,
+  widths = c(1, 1),
+  heights = c(1, 1, 0.2)
+)
+
+Final_4panel_figure <- arrangeGrob(
+  grobs = list(Fig1A, Fig1B, Fig1C, Fig1D, legend),
+  layout_matrix = layout,
+  widths  = c(1, 1),
+  heights = c(1, 1, 0.2)
+)
+
+
+ggsave(here::here("figures", "AEJV_Fig1ABCD_Recovery_Area.pdf"), Final_4panel_figure,
+       device = cairo_pdf, width = 7.25, height = 8.25)
+ggsave(here::here("figures", "AEJV_Fig1ABCD_Recovery_Area.png"), Final_4panel_figure,
+       type = "cairo", width = 7.25, height = 8.25, dpi = 600)
+
+```
+
+# Figure 2
+## Figure 2A: Survival of male and female at 2 weeks
+```{r}
+VMB_Crawler_combined_df$Egg_Count <- as.numeric(VMB_Crawler_combined_df$Egg_Count)
+VMB_Crawler_combined_df$Egg_mass <- as.numeric(VMB_Crawler_combined_df$Egg_mass)
+VMB_Crawler_combined_df$Males <- as.numeric(VMB_Crawler_combined_df$Males)
+VMB_Crawler_combined_df$Week <- as.factor(VMB_Crawler_combined_df$Week)
+VMB_Crawler_combined_df$Week_num <- as.numeric(as.character(VMB_Crawler_combined_df$Week))
+levels(as.factor(VMB_Crawler_combined_df$Week_num))
+
+
+VMB_Crawler_combined_df$Total_recovered <- as.numeric(VMB_Crawler_combined_df$Total_recovered)
+VMB_Crawler_combined_df$Egg_Count <- as.numeric(VMB_Crawler_combined_df$Egg_Count)
+
+
+#Drop rows with Freedom rep #2 from experiment 27JAN26 b/c plant died
+VMB_Crawler_combined_df <- VMB_Crawler_combined_df %>%
+  filter(!(Plant_Name == "Freedom" &
+           Rep == 2 &
+           experiment == "27JAN26"))
+
+
+# #Save week as factor for now and checking order
+# levels(VMB_Crawler_combined_df$Week)
+
+#Make Freedom the first and the control by default
+VMB_Crawler_combined_df$Plant_Name <- fct_relevel(VMB_Crawler_combined_df$Plant_Name, "Freedom")
+# #check reorder
+# levels(VMB_Crawler_combined_df$Plant_Name)
+
+#Reorder experiments
+VMB_Crawler_combined_df$experiment <- fct_relevel(VMB_Crawler_combined_df$experiment, "15APR25", "30JUL25" , "27JAN26" )
+# #check reorder
+# levels(VMB_Crawler_combined_df$experiment)
+
+#Add Cage:experiment ID
+VMB_Crawler_combined_df$subject_id <- interaction(
+  VMB_Crawler_combined_df$Plant_Name,
+  VMB_Crawler_combined_df$experiment,
+  VMB_Crawler_combined_df$Rep,
+  drop = TRUE
+)
+
+
+week2_cages <- VMB_Crawler_combined_df %>%
+  filter(Week_num == 2) %>%
+  group_by(experiment, Plant_Name, subject_id, Rep) %>%
+  summarise(
+    females = unique(Total_recovered),          # all rows have same female count
+    males   = max(replace_na(Males, 0)),        # only one row has male count
+    .groups = "drop"
+  ) %>%
+  mutate(
+    total = 10,
+    unrecovered = total - (females + males)
+  )
+
+week2_long <- week2_cages %>%
+  pivot_longer(
+    cols = c(females, males),
+    names_to = "Sex",
+    values_to = "Recovered"
+  ) %>%
+  mutate(
+    Sex = factor(Sex, levels = c("females", "males"),
+                      labels = c("Female", "Male")),
+    unrecovered = total - Recovered
+  )
+
+
+m_sex_host <- glmer(
+  cbind(Recovered, unrecovered) ~ 
+    Plant_Name * Sex +
+    (1 | experiment) +
+    (1 | subject_id),
+  family = binomial,
+  data = week2_long
+)
+
+simulateResiduals(m_sex_host) %>% plot()
+
+summary(m_sex_host)
+
+pairs(emmeans::emmeans(m_sex_host, ~ Plant_Name))   # averaged over Sex
+ # contrast                 estimate    SE  df z.ratio p.value
+ # Freedom - (Barrett Mn-1)     1.14 0.223 Inf   5.106 <0.0001
+
+
+# Additive model reported values
+m_sex_host_add <- update(m_sex_host, . ~ Plant_Name + Sex +
+                           (1 | experiment) + (1 | subject_id))
+summary(m_sex_host_add)
+# Results: A binomial mixed‑effects model of recovery at week 2, with accession and sex as fixed effects, showed that survival on Barrett Mn‑1 was significantly lower than on Freedom (estimate = −0.95 ± 0.16 SE, z = −5.78, p < 0.001) (Figure 2A)."
+
+anova(m_sex_host_add, m_sex_host)
+# Results: "adding an accession x sex interaction did not improve model fit (likelihood-ratio test, chi2 = 1.91, df = 1, p = 0.17)"
+
+
+# Figure 2A uses the interaction model so the two sexes are estimated here
+emm_sex_host <- emmeans(
+  m_sex_host,
+  ~ Sex | Plant_Name,
+  type = "response"
+)
+
+emm_sex_df <- as.data.frame(emm_sex_host)
+
+contrast_df <- contrast(
+  emm_sex_host,
+  method = "pairwise",
+  by = "Sex",
+  adjust = "none"
+) %>%
+  summary(infer = TRUE) %>%
+  as.data.frame()
+
+
+contrast_df <- contrast_df %>%
+  mutate(
+    stars = case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01  ~ "**",
+      p.value < 0.05  ~ "*",
+      p.value < 0.1   ~ ".",
+      TRUE            ~ ""
+    )
+  )
+
+star_positions_2A <- emm_sex_df %>%
+  group_by(Sex) %>%
+  summarise(
+    y_pos = max(asymp.UCL) + 0.05
+  ) %>%
+  left_join(contrast_df %>% select(Sex, stars), by = "Sex")
+
+
+#Updated plot
+LCA_Initial_Recovery_plot <- ggplot(emm_sex_df,
+       aes(x = Sex,
+           y = prob,
+           ymin = asymp.LCL,
+           ymax = asymp.UCL,
+           fill = Plant_Name)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL),
+                position = position_dodge(width = 0.8),
+                width = 0.2)+
+  scale_fill_manual(values = acc_palette) +
+  geom_text(
+    data = star_positions_2A,
+    aes(x = Sex, y = y_pos, label = stars),
+    color = "black",
+    size = 6,
+    inherit.aes = FALSE
+  ) +
+  labs(
+    x = "Sex",
+    y = "Proportion recovered at week 2",
+    color = "Host Plant"
+  ) +
+  theme_bw(base_size = 14)
+
+LCA_Initial_Recovery_plot
+#ggsave("figures/LCA_Initial_Recovery_plot.png", width = 6, height = 4, dpi = 300)
+
+#Testing if plant accession has an outsized effect on specific survival of one sex 
+m_sexratio <- glmer(cbind(males, females) ~ Plant_Name + (1 | experiment),
+                    family = binomial, data = week2_cages)
+summary(m_sexratio)        # SD 0.876; Plant_Name p = 0.0651
+# Results: "...week 2 sex ratio. Manuscript: "random effect SD = 0.88 ...marginal tendency toward a lower male proportion than Freedom (p = 0.065)."
+
+```
+  
+
+## Figure 2B: Recovery of females weeks 2:6
+```{r}
+# Collapse duplicates and compute baseline Week 2 recovery
+VMB_Crawler_Full_recovery <- VMB_Crawler_combined_df %>%
+  group_by(experiment, Plant_Name, Rep, Week) %>%
+  summarise(Total_recovered = unique(Total_recovered), .groups = "drop") %>%
+  mutate(Week_num = as.numeric(as.character(Week))) %>%
+  group_by(experiment, Plant_Name, Rep) %>%
+  mutate(
+    baseline_week2 = Total_recovered[Week_num == 2][1],
+    prop_recovered = Total_recovered / baseline_week2
+  ) %>%
+  ungroup() %>%
+  mutate(subject_id = interaction(Plant_Name, experiment, Rep, drop = TRUE))
+
+
+# Remove cages with zero baseline
+zero_baseline_ids <- VMB_Crawler_Full_recovery %>%
+  filter(Week_num == 2, Total_recovered == 0) %>%
+  pull(subject_id)
+
+VMB_surv_clean <- VMB_Crawler_Full_recovery %>%
+  filter(!subject_id %in% zero_baseline_ids)
+
+
+# Build binomial survival dataset
+surv_binom <- VMB_surv_clean %>%
+  mutate(
+    survived = Total_recovered,
+    died     = pmax(baseline_week2 - Total_recovered, 0)
+  )
+
+
+# Fit the survival model
+m_surv_binom2 <- glmer(
+  cbind(survived, died) ~ Plant_Name * Week_num +
+    (1 | experiment) +
+    (1 | subject_id),
+  family = binomial,
+  data = surv_binom
+)
+
+simulateResiduals(m_surv_binom2) %>% plot()
+summary(m_surv_binom2)
+# Results:"Using a binomial mixed‑effects model with week treated as a continuous predictor, a significant decline in recovery over time was detected (week effect: z = –4.75, p < 0.001). Since females were not identified at week 0, the model extrapolated the week 0 value, and the accession effect at the intercept was therefore not significant nor meaningful (p = 0.86). However, the strong and significant accession × week interaction (z = –3.74, p < 0.001) showed that recovery trajectories diverged rapidly between hosts." 
+
+
+emm_discrete <- emmeans(
+  m_surv_binom2,
+  ~ Plant_Name | Week_num,
+  at = list(Week_num = 2:6),
+  type = "response"
+)
+
+# Pairwise contrasts for significance stars
+ct <- pairs(emm_discrete, infer = TRUE)
+sct <- summary(ct)
+
+percent_recovery_ci_table <- sct %>%
+  mutate(
+    Week = as.numeric(as.character(Week_num)),
+    stars = case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01  ~ "**",
+      p.value < 0.05  ~ "*",
+      p.value < 0.1   ~ ".",
+      TRUE            ~ ""
+    )
+  )
+
+
+baseline_df <- surv_binom %>%
+  group_by(Plant_Name) %>%
+  summarise(baseline_fem = mean(survived + died), .groups = "drop")
+
+smooth_weeks <- seq(2, 6, by = 0.1)
+
+emm_smooth <- emmeans(
+  m_surv_binom2,
+  specs = c("Plant_Name", "Week_num"),
+  at = list(Week_num = smooth_weeks),
+  type = "response"
+)
+
+emm_smooth_df <- as.data.frame(emm_smooth)
+
+emm_smooth_expanded <- baseline_df %>%
+  left_join(emm_smooth_df, by = "Plant_Name") %>%
+  mutate(
+    predicted_females = prob * baseline_fem,
+    lower = asymp.LCL * baseline_fem,
+    upper = asymp.UCL * baseline_fem
+  )
+
+emm_smooth_plot <- emm_smooth_expanded %>%
+  group_by(Plant_Name, Week_num) %>%
+  summarise(
+    mean_pred = mean(predicted_females),
+    lower = mean(lower),
+    upper = mean(upper),
+    .groups = "drop"
+  )
+
+
+emm_smooth_plot %>% dplyr::filter(Week_num == 6)
+# Results: "0.26 females per cage of 10 introduced by week 6 (95% CI 0.12 to 0.51)" and "3.61 (95% CI 3.08 to 3.94)"
+
+
+star_positions_2B <- emm_smooth_plot %>%
+  group_by(Week_num = round(Week_num)) %>%   # round smooth weeks to whole weeks
+  summarise(
+    ymax = max(upper),
+    .groups = "drop"
+  ) %>%
+  left_join(percent_recovery_ci_table, by = c("Week_num" = "Week")) %>%
+  mutate(
+    ypos = ymax + 0.5
+  )
+
+
+# Build plot
+LCA_Full_Recovery_plot <- ggplot(emm_smooth_plot,
+       aes(x = Week_num, y = mean_pred, color = Plant_Name)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill = Plant_Name),
+              alpha = 0.2, color = NA) +
+  geom_line(size = 1.2) +
+  geom_text(
+    data = star_positions_2B,
+    aes(x = Week_num, y = ypos, label = stars),
+    color = "black",
+    size = 6,
+    inherit.aes = FALSE
+  ) +
+  scale_color_manual(values = acc_palette) +
+  scale_fill_manual(values = acc_palette) +
+  labs(
+    x = "Week",
+    y = "Predicted number of females",
+    color = "Host plant",
+    fill  = "Host plant"
+  ) +
+  theme_bw(base_size = 14) +
+  scale_y_continuous(
+    limits = c(0, 5),
+    breaks = seq(0, 5, by = 1)
+  )
+
+LCA_Full_Recovery_plot
+#ggsave("figures/LCA_Full_Recovery_plot.png", width = 6, height = 4, dpi = 300)
+
+#Consecutive week to week changes
+drops <- emm_smooth_plot %>%
+  filter(Week_num %in% 2:6) %>%   # only whole weeks
+  arrange(Plant_Name, Week_num) %>%
+  group_by(Plant_Name) %>%
+  mutate(
+    drop = mean_pred - lag(mean_pred),
+    abs_drop = abs(drop)
+  )
+
+drops #%>% filter(!is.na(drop))
+
+
+emm_smooth_plot %>%
+  dplyr::filter(Week_num == 6) %>%
+  dplyr::select(Plant_Name, mean_pred) %>%
+  tidyr::pivot_wider(names_from = Plant_Name, values_from = mean_pred) %>%
+  dplyr::mutate(fold = Freedom / `Barrett Mn-1`)
+#   Freedom  `Barrett Mn-1`   fold
+#      3.614926           0.2552287   14.16348
+
+
+# Results: "...an approximately 14-fold difference between the two accessions"
+# Note: this is a ratio of predicted Counts (= probabilities, both out of 10), not an odds ratio.
+
+
+
+```  
+  
+  
+## Figure 2C: Life Cycle Assay: Growth of females weeks 2:6
+```{r}
+# Keep only rows with area (no NAs)
+dat_growth <- subset(VMB_Crawler_combined_df, !is.na(Area))
+
+## Model Comparison
+
+#Random effect
+m_area_gamma_RE <- gam(
+  Area ~ Plant_Name +
+    s(Week_num, by = Plant_Name, k = 5) +
+    s(experiment, bs = "re") +          # random effect for experiment
+    s(subject_id, bs = "re"),           # random effect for cage
+  family = Gamma(link = "log"),
+  data = dat_growth,
+  method = "REML"
+)
+
+# m_area_gamma <- gam(
+#   Area ~ Plant_Name +
+#     s(Week_num, by = Plant_Name, k = 5) +
+#     experiment +   #experiment as a a fixed effect
+#     s(subject_id, bs = "re"),   # random intercept for cage
+#   family = Gamma(link = "log"),
+#   data = dat_growth,
+#   method = "REML"
+# )
+# 
+# AIC(m_area_gamma, m_area_gamma_RE)
+# anova(m_area_gamma_RE, m_area_gamma, test = "F")
+
+
+#Check residual distributions
+
+qc_plot <- function(fit, res, main = "Model QC") {
+  par(mfrow = c(2, 2))
+
+  # Residuals vs fitted
+  plot(fit, res,
+       xlab = "Fitted values",
+       ylab = "Residuals",
+       main = paste(main, "- Residuals vs Fitted"))
+  abline(h = 0, col = "red")
+
+  # QQ-plot
+  qqnorm(res, main = paste(main, "- QQ Plot"))
+  qqline(res, col = "red")
+
+  # Histogram
+  hist(res, breaks = 30,
+       main = paste(main, "- Residual Histogram"),
+       xlab = "Residuals")
+
+  # Autocorrelation (For repeated measures- need to check)
+  acf(res, main = paste(main, "- Residual ACF"))
+}
+
+gam_obj <- m_area_gamma_RE
+res <- resid(gam_obj, type = "deviance")
+fit <- fitted(gam_obj)
+
+qc_plot(fit, res, main = "Gamma GAM")
+gam.check(gam_obj)
+    # Method: REML   Optimizer: outer newton
+    # full convergence after 7 iterations.
+    # Gradient range [-1.864924e-05,1.687596e-05]
+    # (score 957.8665 & scale 0.2472888).
+    # Hessian positive definite, eigenvalue range [0.9401091,395.3769].
+    # Model rank =  71 / 71 
+    # 
+    # Basis dimension (k) checking results. Low p-value (k-index<1) may
+    # indicate that k is too low, especially if edf is close to k'.
+    # 
+    #                                       k'   edf k-index p-value    
+    # s(Week_num):Plant_NameFreedom       4.00  3.60    0.85  <2e-16 ***
+    # s(Week_num):Plant_NameBarrett Mn-1  4.00  3.02    0.85  <2e-16 ***
+    # s(experiment)                       3.00  1.94      NA      NA    
+    # s(subject_id)                      58.00 40.96      NA      NA    
+    # ---
+    # Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+#Testing if growth curves differ overall
+summary(m_area_gamma_RE)
+#Results: "Using a Gamma distributed generalized additive mixed model (GAMM) with plant specific smooths for time, we found that females reared on Barrett Mn-1 remained consistently smaller than those on Freedom, reflected by a strong negative parametric effect of host accession (estimate = –0.639, t = –6.27, p < 0.001) (Figure 2C)."
+#Results: "Both accessions exhibited significant nonlinear changes in body area over time (Freedom: F = 134.8, p < 0.001; Barrett Mn1: F = 55.7, p < 0.001), but the shapes of these curves differed. Mealybugs on Freedom increased rapidly in size, peaking at week 4.5 before declining, consistent with ovisac deposition and the characteristic deflated appearance of ovipositing females described by Sisterson and Uchima (2024)."
+
+
+
+anova(m_area_gamma_RE)
+emm_area <- emmeans(
+  m_area_gamma_RE,
+  ~ Plant_Name | Week_num,
+  at = list(Week_num = c(2, 3, 4, 5, 6)),
+  type = "response"
+)
+
+ct_area  <- pairs(emm_area, infer = TRUE)
+sct_area <- summary(ct_area)
+
+# Converting Freedom/Barrett Mn-1 to Barrett Mn-1/Freedom
+ratio_est  <- 1 / sct_area$ratio
+#Results: "Back transformed contrasts indicated that females on Barrett Mn1 reached only 49 to 56% of the predicted body area of females on Freedom across weeks 2 to 6." 
+
+ratio_low  <- 1 / sct_area$upper.CL
+ratio_high <- 1 / sct_area$lower.CL
+
+#  Annotation table
+area_ci_table <- data.frame(
+  Week = as.numeric(as.character(sct_area$Week_num)),
+  Barrett_pct_of_Freedom = round(100 * ratio_est, 1),
+  lower.CL = round(100 * ratio_low, 1),
+  upper.CL = round(100 * ratio_high, 1),
+  p_value = signif(sct_area$p.value, 3)
+)
+
+# Significance stars for plot
+p_to_stars <- function(p) {
+  ifelse(p < 0.001, "***",
+  ifelse(p < 0.01,  "**",
+  ifelse(p < 0.05,  "*",
+  ifelse(p < 0.1,   ".",
+                    ""))))
+}
+
+area_ci_table$stars <- p_to_stars(area_ci_table$p_value)
+
+# Prediction grid for GAMM
+Growth_data <- expand.grid(
+  Week_num = seq(min(dat_growth$Week_num), max(dat_growth$Week_num), length = 200),
+  Plant_Name = levels(dat_growth$Plant_Name),
+  experiment = levels(dat_growth$experiment)[1],
+  subject_id = levels(dat_growth$subject_id)[1]
+)
+
+pred <- predict(
+  m_area_gamma_RE,
+  newdata = Growth_data,
+  type = "response",
+  se.fit = TRUE,
+  exclude = c("s(subject_id)", "s(experiment)")
+)
+
+Growth_data$fit   <- pred$fit
+Growth_data$upper <- pred$fit + 1.96 * pred$se.fit
+Growth_data$lower <- pmax(0, pred$fit - 1.96 * pred$se.fit)
+
+
+#Confirm when VMB peak on Barrett
+by(Growth_data, Growth_data$Plant_Name, function(df) df[which.max(df$fit), ])
+# Growth_data$Plant_Name: Freedom
+#     Week_num Plant_Name experiment        subject_id      fit    upper    lower
+# 123 4.452261    Freedom    15APR25 Freedom.15APR25.1 3.042696 4.809121 1.276272
+# --------------------------------------------------------------------------------
+# Growth_data$Plant_Name: Barrett Mn-1
+#     Week_num   Plant_Name experiment        subject_id      fit    upper     lower
+# 334 4.673367 Barrett Mn-1    15APR25 Freedom.15APR25.1 1.625279 2.602984 0.6475743
+
+#Results: "Mealybugs on Freedom increased rapidly in size, peaking at week 4.5 before declining, consistent with ovisac deposition and the characteristic deflated appearance of ovipositing females described by Sisterson and Uchima (2024)."
+
+
+# Star posiitons for above UCL
+ucl_by_week_area <- Growth_data %>%
+  mutate(Week = round(Week_num)) %>%     # convert continuous → discrete
+  group_by(Week) %>%
+  summarise(upper = max(upper), .groups = "drop")
+
+annot_area <- merge(
+  area_ci_table,
+  ucl_by_week_area,
+  by = "Week"
+)
+
+annot_area$ypos <- annot_area$upper + 0.1
+
+# Plotting: Smoothed growth curve with approximate 95% Wald intervals on the response scale.
+LCA_Area_GAMM_plot <-  ggplot(Growth_data, aes(Week_num, fit, color = Plant_Name)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill = Plant_Name),
+              alpha = 0.2, color = NA) +
+  geom_line(linewidth = 1.2) +
+  geom_text(
+    data = annot_area,
+    aes(x = Week, y = ypos, label = stars),
+    color = "black",
+    size = 6
+  ) +
+  scale_color_manual(values = acc_palette) +
+  scale_fill_manual(values = acc_palette) +
+  labs(
+    x = "Week",
+    y = bquote("Predicted area "~(mm^2)),
+    color = "Plant",
+    fill  = "Plant"
+  ) +
+  theme_bw()
+
+#Plot
+LCA_Area_GAMM_plot
+
+
+#get the difference in area at week 4 and week 5
+emm <- emmeans(
+  m_area_gamma_RE,
+  ~ Plant_Name | Week_num,
+  at = list(Week_num = c(2, 3, 4, 5, 6))
+)
+
+pairs(emm)
+ct  <- pairs(emm, infer = TRUE)
+sct <- summary(ct)
+
+# Extract log-scale contrasts and CIs
+log_est  <- sct$estimate
+log_low  <- sct$lower.CL
+log_high <- sct$upper.CL
+
+# Convert Freedom/Barrett Mn-1  to Barrett Mn-1/Freedom
+log_ratio      <- -log_est
+log_ratio_low  <- -log_high
+log_ratio_high <- -log_low
+
+# Back-transform to percent
+pct_est  <- 100 * exp(log_ratio)
+pct_low  <- 100 * exp(log_ratio_low)
+pct_high <- 100 * exp(log_ratio_high)
+
+# Build a clean table
+percent_ci_table <- data.frame(
+  Week = sct$Week_num,
+  Barrett_pct_of_Freedom = round(pct_est),
+  lower = round(pct_low),
+  upper = round(pct_high)
+)
+
+percent_ci_table
+
+
+mgcv::gam.vcomp(m_area_gamma_RE)
+# Results: "Variation among experiments was substantial (SD = 0.51 ...) ... larger than variation among cages (SD = 0.33 ...)"
+
+m_no_re <- mgcv::gam(Area ~ Plant_Name + s(Week_num, by = Plant_Name, k = 5),
+                     family = Gamma(link = "log"), data = dat_growth)
+coef(m_no_re)["Plant_NameBarrett Mn-1"]      # -0.310
+coef(m_area_gamma_RE)["Plant_NameBarrett Mn-1"]   # -0.639
+# Results: "increased the estimated host effect from -0.31 to -0.64 on the log scale"
+```
+
+
+### Figure 2ABC : LCA Growth and recovery
+```{r}
+
+#Updated plot to be in %
+emm_sex_df_perc <- emm_sex_df |>
+  dplyr::mutate(
+    prob_pct = prob * 100,
+    SE_pct   = SE * 100,
+    LCL_pct  = asymp.LCL * 100,
+    UCL_pct  = asymp.UCL * 100
+  )
+
+star_positions_perc <- star_positions_2A |>
+  dplyr::mutate(
+    y_pos_pct = y_pos * 100,
+
+  )
+
+LCA_Initial_Recovery_plot <- ggplot(emm_sex_df_perc,
+       aes(x = Sex,
+           y = prob_pct,
+           ymin = LCL_pct,
+           ymax = UCL_pct,
+           fill = Plant_Name)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7,
+    color = "black") +
+  
+  geom_errorbar(aes(ymin = LCL_pct, ymax = UCL_pct),
+                position = position_dodge(width = 0.8),
+                width = 0.2)+
+  scale_fill_manual(values = acc_palette) +
+  geom_text(
+    data = star_positions_perc,
+    aes(x = Sex, y = y_pos_pct, label = stars),
+    color = "black",
+    size = 6,
+    inherit.aes = FALSE
+  ) +
+  labs(
+    x = NULL,
+    y = "Recovered at week 2 (%)",
+    fill  = NULL
+  ) +
+  #theme_bw(base_size = 14)+
+  scale_fill_manual(values = acc_palette) + 
+  theme_pub +
+  labs(tag = "A")+
+theme(
+  legend.position = c(0.95, 0.95),
+  legend.justification = c("right", "top"),
+  legend.background = element_rect(color = "black", linewidth = 0.5, fill = "white"),
+  legend.text = element_text(size = 10)
+)
+
+#LCA_Initial_Recovery_plot
+
+
+LCA_Full_Recovery_plot <- ggplot(emm_smooth_plot,
+       aes(x = Week_num, y = mean_pred, color = Plant_Name)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill = Plant_Name),
+              alpha = 0.4, color = NA) +
+  geom_line(size = 1.2) +
+  geom_text(
+    data = star_positions_2B,
+    aes(x = Week_num, y = ypos, label = stars),
+    color = "black",
+    size = 6,
+    inherit.aes = FALSE
+  ) +
+  scale_color_manual(values = acc_palette) +
+  scale_fill_manual(values = acc_palette) +
+  labs(
+    x = "Week",
+    y = "Predicted recovery",
+    color = "Host plant",
+    fill  = "Host plant"
+  ) +
+  #theme_bw(base_size = 14) +
+  scale_y_continuous(
+    limits = c(0, 5),
+    breaks = seq(0, 5, by = 1)
+  )+ 
+  theme_pub +
+  labs(tag = "B")
+
+#Plotting: Smoothed growth curve with approximate 95% Wald intervals on the response scale.
+LCA_Area_GAMM_plot <-  ggplot(Growth_data, aes(Week_num, fit, color = Plant_Name)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill = Plant_Name),
+              alpha = 0.4, color = NA) +
+  geom_line(linewidth = 1.2) +
+  geom_text(
+    data = annot_area,
+    aes(x = Week, y = ypos, label = stars),
+    color = "black",
+    size = 6
+  ) +
+  scale_color_manual(values = acc_palette) +
+  scale_fill_manual(values = acc_palette) +
+  labs(
+    x = "Week",
+    y = bquote("Predicted area "~(mm^2)),
+    color = "Plant",
+    fill  = "Plant"
+  ) + 
+  theme_pub +
+  labs(tag = "C")
+
+#Shared legend
+LCA_Legend_plot <- ggplot(Growth_data, aes(Week_num, fit, color = Plant_Name)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill = Plant_Name),
+              alpha = 1, color = NA) +
+  scale_color_manual(values = acc_palette) +
+  scale_fill_manual(values = acc_palette) +
+  theme_bw(base_size = 14) +
+  labs(
+    x = "Week",
+    y = bquote("Predicted area "~(mm^2))
+  ) +
+  guides(
+    fill  = guide_legend(title = NULL),
+    color = guide_legend(title = NULL)
+  )
+
+
+Final_LCA_Patchwork <- 
+  (
+    LCA_Initial_Recovery_plot |
+    (LCA_Full_Recovery_plot / LCA_Area_GAMM_plot)
+  )  +
+  plot_layout(
+    heights = c(1, 0.01),   # legend height
+    widths  = c(1, 1.2)     # left vs right column
+  )
+
+Final_LCA_Patchwork
+
+#Save figures
+save_fig(Final_LCA_Patchwork, "AEJV_Fig2ABC_LCA_plot", height = 5.5)
+
+
+```
+
+# Figure 3
+## Figure 3A: Proportion of reproductive females
+```{r}
+
+# Keep only rows with non-missing Area
+dat_growth <- subset(VMB_Crawler_combined_df, !is.na(Area))
+
+
+df_reproduction <- dat_growth %>%
+  mutate(
+    # Reproductive status: NA = Growing, 1 = Reproducing
+    Egg_mass_recode = ifelse(Egg_mass > 0, 1, NA),
+
+    # Create a factor for plotting
+    Reproductive_Status = ifelse(is.na(Egg_mass_recode),
+                                 "Growing", "Reproducing"),
+    Reproductive_Status = factor(Reproductive_Status,
+                                 levels = c("Growing", "Reproducing"))
+  )
+
+df_reproduction <- df_reproduction %>%
+  filter(Week_num %in% 4:6)%>%
+  droplevels()
+
+
+m_repro_prop <- glmmTMB(
+  Reproductive_Status ~ Plant_Name * Week +
+    (1 | experiment) + (1 | subject_id),
+  family = binomial,
+  data = df_reproduction
+)
+
+simulateResiduals(m_repro_prop) %>% plot()
+
+summary(m_repro_prop)
+
+
+emm_repro_prop <- emmeans(
+  m_repro_prop,
+  ~ Plant_Name | Week,
+  type = "response"   # predicted probabilities + CIs
+)
+
+emm_repro_prop_df <- as.data.frame(emm_repro_prop)
+
+contrast_repro_prop_df <- contrast(emm_repro_prop, method = "pairwise") %>%
+  summary(infer = TRUE) %>%
+  as.data.frame()
+
+
+contrast_repro_prop_df <- contrast_repro_prop_df %>%
+  mutate(
+    stars = case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01  ~ "**",
+      p.value < 0.05  ~ "*",
+      TRUE            ~ ""
+    )
+  )
+
+
+annot_df <- emm_repro_prop_df %>%
+  group_by(Week) %>%
+  summarise(y_pos = max(asymp.UCL) + 0.05) %>%
+  left_join(contrast_repro_prop_df %>% select(Week, stars), by = "Week")
+
+
+
+positionddoge <- position_dodge(width = 0.15)
+
+# Plotting
+Survivor_repro_plot <- ggplot(
+  emm_repro_prop_df,
+  aes(
+    x = Week,
+    y = prob,
+    color = Plant_Name,
+    shape = Plant_Name,
+    group = Plant_Name
+  )
+) +
+  geom_line(position = positionddoge, linewidth = 1) +
+  geom_errorbar(
+    aes(ymin = asymp.LCL, ymax = asymp.UCL),
+    position = positionddoge,
+    width = 0.15,
+    linewidth = 0.5
+  ) +
+  geom_point(
+    position = positionddoge,
+    size = 3,
+    fill = "white"   # needed for shape 24
+  ) +
+  geom_text(
+    data = annot_df,
+    aes(x = Week, y = y_pos, label = stars),
+    color = "black",
+    size = 6,
+    inherit.aes = FALSE
+  ) +
+  scale_color_manual(values = acc_palette) +
+  scale_shape_manual(values = c(
+    "Freedom" = 16,        # filled circle
+    "Barrett Mn-1" = 24    # triangle with white fill
+  )) +
+  labs(
+    x = "Week",
+    y = "Oviposition rate of surviving females",
+    color = NULL,
+    shape = NULL
+  ) +
+  theme_pub +
+  theme(
+    legend.position = c(0.05, 0.95),
+    legend.justification = c("left", "top"),
+     legend.text = element_text(size = 10),
+    legend.background = element_rect(
+      color = "black",
+      linewidth = 0.5,
+      fill = "white"
+    )
+  ) +
+  ylim(0, 1)
+
+
+Survivor_repro_plot
+
+#ggsave("figures/LCA_Reproduction_x_Time.png", width = 6, height = 4, dpi = 300)
+
+
+
+summary(m_repro_prop)
+# Results: "Among surviving females, the probability that females oviposited during the 6-week life-cycle tests differed between accessions. A binomial mixed‑effects model including accession, week, and their interaction showed that rates of oviposition increased significantly by week 6 (p < 0.05)."
+
+car::Anova(m_repro_prop)
+# Results: "Females on Barrett Mn‑1 were less likely to reproduce than those on Freedom (χ² = 5.17, df = 1, p = 0.023). The accession × week coefficient at week 6 (p = 0.043) indicated that the increase in reproductive incidence over time was weaker on Barrett Mn‑1, although the interaction term as a whole was not significant (χ² = 4.32, df = 2, p = 0.115)."
+
+emmeans::emmeans(m_repro_prop, ~ Plant_Name | Week,
+                 data = droplevels(m_repro_prop$frame), type = "response")
+# Results: "The six week no choice assay confirmed demographic consequences, with the predicted probability of oviposition by week 6 reaching only 0.03 on Barrett Mn 1 versus 0.56 on Freedom. "
+
+```
+
+
+## Fig3B: Total reproductive females
+  Number of reproductive females 
+```{r}
+
+all_cages <- VMB_Crawler_combined_df %>%
+  distinct(Plant_Name, experiment, subject_id)
+
+all_weeks <- tibble(Week_num = 4:6)
+
+full_grid <- tidyr::expand_grid(all_cages, all_weeks)
+
+df_counts <- VMB_Crawler_combined_df %>%
+  filter(Week_num %in% 4:6) %>%
+  group_by(Plant_Name, experiment, subject_id, Week_num) %>%
+  summarize(
+    n_survived = sum(!is.na(Area)),               
+    n_repro    = sum(Egg_mass > 0, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+all_cages <- VMB_Crawler_combined_df %>%
+  distinct(Plant_Name, experiment, subject_id)
+
+all_weeks <- tibble(Week_num = 4:6)
+
+full_grid <- tidyr::expand_grid(all_cages, all_weeks)
+
+df_complete <- full_grid %>%
+  left_join(df_counts,
+            by = c("Plant_Name", "experiment", "subject_id", "Week_num")) %>%
+  mutate(
+    n_survived = replace_na(n_survived, 0),
+    n_repro    = replace_na(n_repro, 0),
+    n_total    = 10,
+    n_nonrepro = pmax(n_survived - n_repro, 0),
+    n_died     = n_total - n_survived
+  )
+
+
+df_complete <- df_complete %>%
+  mutate(
+    n_nonrepro_or_dead = n_nonrepro + n_died
+  )
+
+#Update week as a factor
+df_complete <- df_complete %>%
+  mutate(Week = factor(Week_num))
+
+
+m_repro_count <- glmmTMB(
+  n_repro ~ Plant_Name * Week +
+    (1 | experiment) + (1 | subject_id),
+  family = nbinom2,
+  data = df_complete
+)
+
+
+simulateResiduals(m_repro_count) %>% plot()
+summary(m_repro_count)
+
+
+emm_repro_count <- emmeans(
+  m_repro_count,
+  ~ Plant_Name | Week,
+  type = "response" #Computes CI on the linear predictor (log scale)
+)
+
+emm_repro_count_df <- as.data.frame(emm_repro_count)
+
+
+#What is the fold-size difference of reproductive female VMB on Freedom compared to those on Barrett Mn-1?
+ratio_repro <- emmeans(
+  m_repro_count,
+  pairwise ~ Plant_Name | Week,
+  type = "response"
+)
+
+ratio_repro$contrasts
+
+#Plot of total predicted reproductive females
+
+ratio_df <- as.data.frame(ratio_repro$contrasts) |>
+  mutate(
+    stars = case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01  ~ "**",
+      p.value < 0.05  ~ "*",
+      p.value < 0.1   ~ ".",
+      TRUE            ~ ""
+    )
+  )
+
+plot_df <- left_join(emm_repro_count_df, ratio_df |> select(Week, stars), by = "Week")
+
+#Y-positions for annotations
+week_max <- plot_df |>
+  group_by(Week) |>
+  summarize(y_pos = max(response) + 0.3)
+
+#Merge
+plot_df <- left_join(plot_df, week_max, by = "Week")
+
+# Plotting
+establishment_plot <- ggplot(
+  plot_df,
+  aes(x = Week, y = response, fill = Plant_Name)
+) +
+  geom_col(position = position_dodge(width = 0.8),
+           width = 0.7, color = "black") +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL),
+                position = position_dodge(width = 0.8),
+                width = 0.15, linewidth = 0.8) +
+  geom_text(aes(x = Week, y = y_pos, label = stars),
+            vjust = -0.3, size = 6, color = "black") +
+  scale_y_continuous(
+    limits = c(0, 1.15),
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  scale_x_discrete("Week") +
+  scale_color_manual(values = acc_palette) +
+  scale_fill_manual(values = acc_palette) +
+  labs(
+    x = "Week",
+    y = "Predicted reproductive females",
+    color = NULL,
+    shape = NULL,
+    fill = NULL      # ← THIS removes the legend title
+  ) +
+  theme_pub +
+  theme(
+    legend.position = c(0.05, 0.95),
+    legend.justification = c("left", "top"),
+     legend.text = element_text(size = 10),
+    legend.background = element_rect(
+      color = "black",
+      linewidth = 0.5,
+      fill = "white"
+    )
+  ) +
+  ylim(0, 4)
+
+
+establishment_plot
+
+#ggsave("figures/LCA_EstablishmentToReproduce.png", width = 6, height = 4, dpi = 600)
+
+
+car::Anova(m_repro_count)
+# Results: "Across all weeks, Barrett Mn‑1 supported substantially fewer reproductive females than Freedom (estimate = −1.81 ± 0.46 SE, z = −3.93, p < 0.001) significant (χ² = 38.4, df = 1, p < 0.001) (Figure 3B)"
+
+summary(m_repro_count)
+# Results: "Neither week nor the accession × week interaction reached significance." - the interaction at week 6 approached marginal significance (estimate = -1.21 +/- 0.73 SE, p = 0.099)"
+
+ratio_repro$contrasts        # 6.13 / 7.74 / 20.48
+# Results: "Estimated marginal means showed that reproductive female counts on Freedom remained relatively consistent across weeks, whereas counts on Barrett Mn‑1 were lower at every time point. Fold‑change estimates across weeks 4 to 6 indicated that Freedom supported 6.1‑ to 20.5‑fold more reproductive females than Barrett Mn‑1."
+```
+
+
+### Figure 3AB: Reproduction
+```{r}
+
+
+FigS3A_labeled <- Survivor_repro_plot+ 
+
+  labs(tag = "A") +
+  theme(plot.tag = element_text(size = 14, face = "bold"))
+
+
+FigS3B_labeled <-establishment_plot+ 
+  labs(tag = "B") +
+  theme(plot.tag = element_text(size = 14, face = "bold"))
+
+  final_Fig3 <- 
+  (FigS3A_labeled + FigS3B_labeled) +
+  plot_layout(guides = "keep")
+
+
+final_Fig3
+
+
+#Save figure
+save_fig(final_Fig3, "AEJV_Fig3AB_LCA_Reproduction", height = 5) 
+
+```
+
+# Figure 4
+## Figure 4: Two-choice assay
+```{r}
+# Reshape data to one row per arena. In a two-choice arena, n_freedom + n_barrett = total recovered. The two plants are complementary ie. this is a paired choice, not two independent samples. Entering both rows double-counts every arena.
+
+VMB_choice$Date <- as.factor(VMB_choice$Date)
+VMB_choice$Plant_Name <- as.factor(VMB_choice$Plant_Name)
+VMB_choice$Rep <- as.factor(VMB_choice$Rep)
+
+choice_arena <- VMB_choice |>
+  dplyr::filter(Plant_Name == "Freedom") |>
+  dplyr::transmute(
+    arena     = interaction(Rep, Date, drop = TRUE),  # Rep restarts each date
+    Date      = Date,
+    n_freedom = Recovered,
+    n_barrett = Total_recovered - Recovered,
+    n_total   = Total_recovered
+  )
+
+# Sanity checks
+stopifnot(
+  all(choice_arena$n_freedom + choice_arena$n_barrett == choice_arena$n_total),
+  dplyr::n_distinct(choice_arena$arena) == nrow(choice_arena)
+)
+
+
+# Fitting a beta-binomial rather than binomial b/c arenas vary in preference strength beyond binomial sampling.
+
+m_choice_bb <- glmmTMB::glmmTMB(
+  cbind(n_freedom, n_barrett) ~ 1,
+  family = glmmTMB::betabinomial,
+  data   = choice_arena
+)
+
+summary(m_choice_bb)
+plogis(c(0.6977, 0.6977 - 1.96*0.2074, 0.6977 + 1.96*0.2074))   # 0.668, 0.572, 0.751
+# Results: "66.8% (95% CI 57.2 to 75.1%; beta-binomial GLM, beta = 0.698 +/- 0.207 SE, z = 3.36, p = 0.0008)"
+
+DHARMa::simulateResiduals(m_choice_bb) |> DHARMa::testDispersion()
+
+  # 	DHARMa nonparametric dispersion test via sd of residuals fitted vs. simulated
+  # data:  simulationOutput
+  # dispersion = 1.1715, p-value = 0.296 
+  # alternative hypothesis: two.sided
+
+# Does preference differ between test dates?  (Draft manuscript Ln 269-271, 420-421)
+m_choice_bb_date <- glmmTMB::glmmTMB(
+  cbind(n_freedom, n_barrett) ~ Date,
+  family = glmmTMB::betabinomial,
+  data   = choice_arena
+)
+
+anova(m_choice_bb, m_choice_bb_date)
+  # Data: choice_arena
+  # Models:
+  # m_choice_bb: cbind(n_freedom, n_barrett) ~ 1, zi=~0, disp=~1
+  # m_choice_bb_date: cbind(n_freedom, n_barrett) ~ Date, zi=~0, disp=~1
+  #                  Df    AIC    BIC  logLik deviance  Chisq Chi Df Pr(>Chisq)
+  # m_choice_bb       2 124.88 128.31 -60.440   120.88                         
+  # m_choice_bb_date  3 125.95 131.09 -59.975   119.95 0.9288      1     0.3352
+
+# Results: "Preference did not differ between test dates (p = 0.335)"
+
+
+# Values reproduce the hard-coded plogis() line above: p_freedom 0.668, ci_freedom 0.572-0.751, pval 0.0008.
+    # summary(m_choice_bb)
+    # plogis(c(0.6977, 0.6977 - 1.96*0.2074, 0.6977 + 1.96*0.2074))   # 0.668, 0.572, 0.751
+
+.cf_choice <- summary(m_choice_bb)$coefficients$cond
+.b_choice  <- .cf_choice[1, "Estimate"]
+.se_choice <- .cf_choice[1, "Std. Error"]
+
+p_freedom  <- plogis(.b_choice)
+ci_freedom <- plogis(.b_choice + c(-1.96, 1.96) * .se_choice)
+pval       <- .cf_choice[1, "Pr(>|z|)"]
+
+stopifnot(
+  all.equal(round(p_freedom, 3), 0.668),
+  all.equal(round(ci_freedom, 3), c(0.572, 0.751)),
+  pval < 0.001
+)
+
+# Build the plotting frame (only p_freedom is estimated b/c Barrett Mn-1 is its complement (1 - p), not an independent estimate.
+
+choice_summary <- data.frame(
+  Plant_Name = factor(c("Freedom", "Barrett Mn-1"),
+                      levels = c("Freedom", "Barrett Mn-1")),
+  prob       = c(p_freedom,      1 - p_freedom),
+  asymp.LCL  = c(ci_freedom[1],  1 - ci_freedom[2]),
+  asymp.UCL  = c(ci_freedom[2],  1 - ci_freedom[1])
+)
+
+# One test (is preference different from 50:50?), so one significance label
+sig_label <- cut(pval,
+                 breaks = c(-Inf, 0.001, 0.01, 0.05, 0.1, Inf),
+                 labels = c("***", "**", "*", ".", ""),
+                 right  = TRUE)
+
+
+# Plotting
+Choice_Recovery_emmeansplot <- ggplot(
+  choice_summary,
+  aes(x = Plant_Name, y = prob, fill = Plant_Name)
+) +
+  geom_col(width = 0.7, color = "black") +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.15) +
+  # Reference line: no preference
+  geom_hline(yintercept = 0.5, linetype = "dashed", linewidth = 0.4,
+             colour = "grey40") +
+  geom_signif(
+    comparisons = list(c("Freedom", "Barrett Mn-1")),
+    annotations = as.character(sig_label),
+    y_position  = max(choice_summary$asymp.UCL) + 0.06,
+    tip_length  = 0.03,
+    textsize    = 5
+  ) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25)) +
+  scale_fill_manual(values = acc_palette) +
+  labs(x = NULL, y = "Proportion of recovered VMB") +
+  theme_pub
+
+final_Fig4 <- Choice_Recovery_emmeansplot + theme(legend.position = "none")
+
+final_Fig4
+
+# Saving figure
+
+save_fig(final_Fig4, "AEJV_Fig4_choice", height = 3.5, width = W_SINGLE)
+
+ 
+
+# Calc. fold difference in preference
+p_freedom / (1 - p_freedom)
+cat(sprintf("Freedom was chosen %.2f-fold more often than Barrett Mn-1\n",
+            p_freedom / (1 - p_freedom)))
+
+# 2.009126
+# Results: "Of 170 mealybugs recovered across 41 arenas, 115 settled on Freedom, corresponding to a model‑estimated preference of 66.8% (95% CI 57.2 to 75.1%; beta‑binomial GLM, β = 0.698 ± 0.207 SE, z = 3.36, p = 0.0008) and approximately 2.0 fold more mealybugs on Freedom than on Barrett Mn‑1 (Figure 4)." 
+
+c(arenas = nrow(choice_arena), insects = sum(choice_arena$n_total),
+  freedom = sum(choice_arena$n_freedom))
+# Results:  "Of 170 mealybugs recovered across 41 arenas, 115 settled on Freedom"
+
+
+```
+
+## Figure 5
+
+# Figure 5A: Power analysis simulation for 12-day growth (body area)
+```{r}
+# Question: how many cages per accession are needed to detect a given percentage reduction in VMB body area?
+# Method: simulate data in which we set the true effect, analyze each simulated dataset the way the real data were analyzed, and count how often the effect is detected.
+
+#Notes: Each power grid is cached as an .rds in results/. Knitting loads the cache; deleting an .rds regenerates that grid from scratch. The cached grids are the ones behind the published Figure 5.
+
+
+## Shared settings and helpers (used by 5A, 5B and 5C) 
+RUN_GATES <- FALSE   # TRUE re-runs the validation gates in all three panels
+SEED      <- 123L    # seed used when the published grids were generated
+
+# Load a cached result if it exists. If none, run, save and return it.
+cache_or_run <- function(path, expr, seed = SEED) {
+  if (file.exists(path)) return(readRDS(path))
+  set.seed(seed)
+  res <- force(expr)
+  dir.create(dirname(path), showWarnings = FALSE, recursive = TRUE)
+  saveRDS(res, path)
+  res
+}
+
+summarise_power <- function(hits, nsim) {
+  k  <- sum(hits, na.rm = TRUE)
+  n  <- sum(!is.na(hits))
+  ci <- binom::binom.wilson(k, n)
+  tibble::tibble(power = k / n, lower = ci$lower, upper = ci$upper,
+                 fail_rate = 1 - n / nsim)
+}
+
+# Sample size at which power crosses a threshold, by linear interpolation between grid points. Reporting the first grid point above the threshold would overstate the requirement because the grid steps are uneven.
+crossing <- function(x, power, target) {
+  if (all(power < target)) return(NA_real_)
+  i <- which(power >= target)[1]
+  if (i == 1) return(x[1])
+  stats::approx(power[(i - 1):i], x[(i - 1):i], xout = target)$y
+}
+
+
+# Parameters
+
+NSIM_5A <- 1000
+
+# cages_8_9 (Figure 1D), which keeps rows for insects that were not recovered (Area = NA).
+cages_8_9$cageID <- interaction(cages_8_9$experiment, cages_8_9$Rep,
+                                cages_8_9$Accession, drop = TRUE)
+
+# Variance components come from a model with the same fixed effects as the analysis model used in the simulation (no accession x experiment term).
+m_area_sim_base <- lme4::lmer(
+  Area ~ InitialMean + Accession + experiment + (1 | cageID),
+  data = cages_8_9
+)
+VAR_CAGE <- as.numeric(lme4::VarCorr(m_area_sim_base)$cageID)  # 0.07591891
+SIGMA_E  <- sigma(m_area_sim_base)                             # 0.8576942
+
+# Fixed-effect values are hard-coded from the reported Figure 1C analysis (m_area_interaction and its marginal means).
+B_INITIAL   <- 1.9474   # InitialMean coefficient (m_area_interaction)
+MEAN_AREA   <- 1.97     # Freedom marginal mean, mm2 (emm_VMB89_area1)
+EXP_SHIFT_A <- 0.4204   # VMB8 to VMB9 shift in mean area (m_area_interaction)
+
+print(tibble::tibble(
+  constant    = c("B_INITIAL", "EXP_SHIFT_A", "MEAN_AREA"),
+  used        = c(B_INITIAL, EXP_SHIFT_A, MEAN_AREA),
+  live_value  = c(lme4::fixef(m_area_interaction)[["InitialMean"]],
+                  lme4::fixef(m_area_interaction)[["experimentVMB9"]],
+                  emm_VMB89_area1_df$emmean[emm_VMB89_area1_df$Accession == "Freedom"])
+))
+
+# Between-run SD of the accession effect: A variance cannot be estimated from two runs, but for two groups whose effects differ by d, the SD of the effects is d / sqrt(2). d = 0.6992 is the accession x experiment coefficient in m_area_interaction.
+SIGMA_GE_OBS <- 0.6992 / sqrt(2)   # 0.4944091
+
+# Insects measured per cage, by accession: Not a flat 5 b/c recovery is lower on Barrett Mn-1, so a Barrett cage yields about 2.75 insects against about 4.15 for Freedom. Simulating 5 per cage would inflate power by inventing data that are never collected.
+insects_per_cage <- cages_8_9 |>
+  dplyr::filter(!is.na(Area)) |>
+  dplyr::count(Accession, cageID, name = "n_insects")
+N_BY_ACC <- split(insects_per_cage$n_insects, insects_per_cage$Accession)
+
+INIT_VALS <- cages_8_9$InitialMean[!is.na(cages_8_9$InitialMean)]
+INIT_MEAN <- mean(INIT_VALS)  #0.3755935
+
+
+# Effect sizes 
+# Percentage reductions in Freedom's mean body area, expressed in mm2 (the scale the model works on). Observed: 48% (1.97 to 1.02 mm2, -0.95).
+
+effect_table_A <- tibble::tibble(reduction_pct = c(20, 30, 40)) |>
+  dplyr::mutate(effect_mm2 = -MEAN_AREA * reduction_pct / 100)
+effect_table_A
+# 20% is -0.394 | 30% is -0.591 | 40% is -0.788
+
+
+# Design and model builders 
+
+# Data skeleton: which cages exist, their accession and experiment, how many insects each yields (drawn from the accession-specific distribution above), and each cage's starting size (centered, so the intercept is the mean at average starting size).
+make_growth_design <- function(reps_per_exp, n_exps) {
+  d <- expand.grid(
+    rep        = seq_len(reps_per_exp),
+    Accession  = factor(c("Freedom", "Barrett Mn-1"),
+                        levels = c("Freedom", "Barrett Mn-1")),
+    experiment = factor(paste0("E", seq_len(n_exps)))
+  )
+  d$cageID <- factor(paste(d$experiment, d$Accession, d$rep, sep = "."))
+
+  # One row per measured insect.
+  d <- d[rep(seq_len(nrow(d)),
+             times = vapply(as.character(d$Accession),
+                            function(a) sample(N_BY_ACC[[a]], 1), integer(1))), ]
+  d$cageID <- droplevels(d$cageID)
+
+  init <- setNames(sample(INIT_VALS, nlevels(d$cageID), replace = TRUE) - INIT_MEAN,
+                   levels(d$cageID))
+  d$InitialMean <- init[as.character(d$cageID)]
+  d
+}
+
+# Fit a model to a placeholder response, then overwrite every parameter with the values we choose. powerSim() simulates new responses from  installed values on this fixed design.
+
+# There is no accession x experiment term here.
+build_growth_model <- function(reps_per_exp, n_exps, effect_mm2, seed = 1L) {
+  set.seed(seed)                   # fixes design and simulation draws per cell
+  d <- make_growth_design(reps_per_exp, n_exps)
+
+  exp_fixed <- seq(0, EXP_SHIFT_A, length.out = n_exps)
+  b  <- c(MEAN_AREA, B_INITIAL, effect_mm2)
+  nm <- c("(Intercept)", "InitialMean", "AccessionBarrett Mn-1")
+  if (n_exps > 1) {
+    b  <- c(b, exp_fixed[-1])
+    nm <- c(nm, paste0("experimentE", 2:n_exps))
+  }
+
+  # Placeholder response, only so lmer has something to fit.
+  d$Area <- b[1] + b[2] * d$InitialMean +
+            b[3] * (d$Accession == "Barrett Mn-1") +
+            exp_fixed[as.integer(d$experiment)] +
+            rnorm(nlevels(d$cageID), 0, sqrt(VAR_CAGE))[d$cageID] +
+            rnorm(nrow(d), 0, SIGMA_E)
+
+  form <- if (n_exps > 1) Area ~ InitialMean + Accession + experiment + (1 | cageID)
+          else            Area ~ InitialMean + Accession + (1 | cageID)
+  mod <- suppressWarnings(lme4::lmer(form, data = d))
+
+  # This line prevents coefficients coming out in wrong order
+  stopifnot(identical(names(lme4::fixef(mod)), nm))
+
+  fixef(mod)   <- b
+  VarCorr(mod) <- list(cageID = VAR_CAGE)
+  sigma(mod)   <- SIGMA_E
+  mod
+}
+
+# Confirm the override took effect.
+m_chk_5A <- build_growth_model(reps_per_exp = 10, n_exps = 3, effect_mm2 = -0.591)
+stopifnot(
+  isTRUE(all.equal(unname(lme4::fixef(m_chk_5A)["AccessionBarrett Mn-1"]), -0.591,
+                   tolerance = 1e-8)),
+  isTRUE(all.equal(sigma(m_chk_5A), SIGMA_E, tolerance = 1e-8))
+)
+
+
+# Validation gates 
+# Gate 1 (calibration): true effect zero. A correctly specified pipeline rejects at the nominal rate. Expecting 0.03 to 0.07.
+  #shows the test is not too liberal
+# Gate 2 (recovery of a known effect): observed effect (-0.95) on roughly the observed design (2 experiments, 13 cages per accession). Expect power at or very near 1.00
+  #shows the test is not too conservative.
+
+if (RUN_GATES) {
+  print(powerSim(build_growth_model(10, 3, effect_mm2 = 0),
+                 test = fixed("AccessionBarrett Mn-1", "t"),
+                 nsim = 500, progress = FALSE))
+  print(powerSim(build_growth_model(13, 2, effect_mm2 = -0.95),
+                 test = fixed("AccessionBarrett Mn-1", "t"),
+                 nsim = 500, progress = FALSE))
+}
+
+
+# Power grid
+
+design_grid_5A <- expand.grid(
+  reps_per_exp = c(2, 4, 6, 8, 10, 15, 20),
+  n_exps       = 3,
+  effect_mm2   = effect_table_A$effect_mm2
+) |>
+  dplyr::mutate(cages_per_accession = reps_per_exp * n_exps,
+                total_cages         = cages_per_accession * 2)
+
+power_growth <- cache_or_run(
+  here::here("results", "power_growth_grid.rds"),
+  purrr::pmap_dfr(design_grid_5A, function(reps_per_exp, n_exps, effect_mm2,
+                                           cages_per_accession, total_cages) {
+    ps <- powerSim(build_growth_model(reps_per_exp, n_exps, effect_mm2),
+                   test = fixed("AccessionBarrett Mn-1", "t"),
+                   nsim = NSIM_5A, progress = FALSE)
+    dplyr::bind_cols(
+      tibble::tibble(reps_per_exp, n_exps, effect_mm2, cages_per_accession, total_cages),
+      summarise_power(ps$pval < 0.05, nsim = NSIM_5A))
+  }))
+
+stopifnot(nrow(power_growth) == nrow(design_grid_5A),
+          max(power_growth$fail_rate) == 0)
+
+power_growth <- power_growth |>
+  dplyr::mutate(effect_lab = factor(round(effect_mm2, 3),
+                                    levels = round(effect_table_A$effect_mm2, 3),
+                                    labels = paste0(effect_table_A$reduction_pct, "%")))
+
+power_growth |>
+  dplyr::arrange(effect_lab, cages_per_accession) |>
+  dplyr::group_by(effect_lab) |>
+  dplyr::summarise(cages_80 = crossing(cages_per_accession, power, 0.80),
+                   cages_90 = crossing(cages_per_accession, power, 0.90),
+                   .groups = "drop")
+# Results (interpolated): "Detecting a 30% reduction in VMB growth required approximately 15 total cages per accession for 80% power and 19 for 90% power across three experiments, whereas detecting a smaller 20% reduction required about 33 cages (Figure 5A)."
+
+
+# Sensitivity: cost of between-run variation
+  # These counts assume the accession effect is consistent across experimental runs (no between-run variation). T The 12-day data show a significant accession x experiment term, so to the extent the effect varies between runs, more cages would be needed. Section below quantifies the cost of that assumption (not discussed in paper)
+  # Simulates a TRUE NULL with between-run variation in the accession effect (sigma_ge), analysed without a G x E term. At sigma_ge = 0 the false-positive rate should sit near 0.05; any excess at sigma_ge > 0 is the cost of assuming runs are equivalent. Cached; delete the .rds to regenerate.
+
+simulate_growth_data <- function(reps_per_exp, n_exps, effect_mm2, sigma_ge) {
+  d <- make_growth_design(reps_per_exp, n_exps)     # no set.seed here
+  exp_fixed <- seq(0, EXP_SHIFT_A, length.out = n_exps)
+  ge_lev <- interaction(d$Accession, d$experiment, drop = TRUE)
+  u_ge   <- rnorm(nlevels(ge_lev), 0, sigma_ge)
+  u_cage <- rnorm(nlevels(d$cageID), 0, sqrt(VAR_CAGE))
+  d$Area <- MEAN_AREA + B_INITIAL * d$InitialMean +
+            effect_mm2 * (d$Accession == "Barrett Mn-1") +
+            exp_fixed[as.integer(d$experiment)] +
+            u_ge[ge_lev] + u_cage[d$cageID] +
+            rnorm(nrow(d), 0, SIGMA_E)
+  d
+}
+
+test_growth_once <- function(d) {
+  form <- if (nlevels(d$experiment) > 1) Area ~ InitialMean + Accession + experiment + (1 | cageID)
+          else                           Area ~ InitialMean + Accession + (1 | cageID)
+  fit <- try(lmerTest::lmer(form, data = d), silent = TRUE)
+  if (inherits(fit, "try-error")) return(NA)
+  p <- summary(fit)$coefficients["AccessionBarrett Mn-1", "Pr(>|t|)"]
+  if (is.na(p)) NA else p < 0.05
+}
+
+sens_grid_A <- expand.grid(
+  cages_per_accession = c(24, 48),       # total, held fixed across n_exps
+  n_exps              = c(2, 3, 4),
+  sigma_ge            = c(0, SIGMA_GE_OBS / 2, SIGMA_GE_OBS)
+) |>
+  dplyr::filter(cages_per_accession %% n_exps == 0) |>
+  dplyr::mutate(reps_per_exp = cages_per_accession / n_exps)
+
+power_growth_sens <- cache_or_run(
+  here::here("results", "power_growth_sens.rds"),
+  purrr::pmap_dfr(sens_grid_A, function(cages_per_accession, n_exps, sigma_ge,
+                                        reps_per_exp) {
+    hits <- replicate(500, test_growth_once(
+      simulate_growth_data(reps_per_exp, n_exps, 0, sigma_ge)))
+    tibble::tibble(cages_per_accession, n_exps, reps_per_exp, sigma_ge,
+                   type1 = mean(hits, na.rm = TRUE))
+  }),
+  seed = 123L)
+
+power_growth_sens |>
+  dplyr::select(-reps_per_exp) |>
+  tidyr::pivot_wider(names_from = sigma_ge, values_from = type1,
+                     names_prefix = "sigmaGE_") |>
+  dplyr::arrange(cages_per_accession, n_exps) |>
+  print(n = Inf)
+```
+
+# Figure 5B: Power analysis simulation for 12-day recovery
+```{r}
+# Question: how many cages per accession are needed to detect a given percentage-point reduction in VMB recovery?
+# Design note: the accession x experiment interaction was not significant for recovery so the accession effect is treated as consistent across test dates. Experiment is kept as a fixed nuisance effect because baseline recovery differs strongly between runs (p = 3.4e-07). Uses cache_or_run(), summarise_power() and crossing() from the 5A chunk.
+
+# Parameters (from the 88-cage recovery model, Figure 1D)
+
+NSIM_5B <- 1000
+
+stopifnot(exists("m_recovery_main_789"))
+vc_cage   <- as.numeric(lme4::VarCorr(m_recovery_main_789)$cageID)   # 0.2689
+beta_obs  <- lme4::fixef(m_recovery_main_789)
+exp_shift <- c(0, beta_obs[["experimentVMB8"]], beta_obs[["experimentVMB9"]])
+# 0, 0.735, 2.055: between-run differences on the logit scale
+
+P_FREEDOM <- 0.812   # Freedom recovery averaged over experiments (emm_VMB789_recovery)
+INSECTS   <- 5L      # insects per cage going forward (VMB7 used 6)
+N_EXPS    <- 3L
+
+# The first simulated experiment sits at P_FREEDOM (81.2%), and the observed logit-scale shifts are added for the second and third. The simulated runs sit at about 81%, 90% and 97% Freedom recovery, compared with 63%, 78% and 93% observed: 
+
+
+
+# Effect sizes 
+# Percentage-point reductions from an 81.2% Freedom baseline, converted to a constant shift on the logit scale and applied in every simulated experiment.
+# Note: these are percentage-point reductions, not relative ones as for area. 
+
+effect_table <- tibble::tibble(reduction_pp = c(20, 30, 40)) |>
+  dplyr::mutate(p_barrett    = P_FREEDOM - reduction_pp / 100,
+                logit_effect = qlogis(p_barrett) - qlogis(P_FREEDOM))
+effect_table
+
+
+# Model builder 
+# Each insect is a yes/no outcome for recovery in a cage. Its chance of recovery is built from the Freedom baseline, the accession effect (if Barrett), the experiment shift, and a random nudge shared by all insects in the same cage (eg. the plant is healthy or unhealthy compared to other caged plants of the same accession).
+
+build_recovery_model <- function(reps_per_exp, logit_effect,
+                                 n_exps = N_EXPS, seed = 1L) {
+  d <- expand.grid(
+    insect     = seq_len(INSECTS),
+    rep        = factor(seq_len(reps_per_exp)),
+    experiment = factor(paste0("E", seq_len(n_exps))),
+    Accession  = factor(c("Freedom", "Barrett Mn-1"),
+                        levels = c("Freedom", "Barrett Mn-1"))
+  )
+  d$cageID <- factor(paste(d$experiment, d$rep, d$Accession, sep = "."))
+
+  b  <- c(qlogis(P_FREEDOM), logit_effect)
+  nm <- c("(Intercept)", "AccessionBarrett Mn-1")
+  if (n_exps > 1) {
+    b  <- c(b, exp_shift[2:n_exps])
+    nm <- c(nm, paste0("experimentE", 2:n_exps))
+  }
+
+  # Placeholder binary response so glmer converges. It must not be constant, or glmer stops with "Response is constant".
+  set.seed(seed)                   # fixes simulation draws per cell
+  lp <- b[1] + b[2] * (d$Accession == "Barrett Mn-1") +
+        rnorm(nlevels(d$cageID), 0, sqrt(vc_cage))[d$cageID]
+  if (n_exps > 1) for (k in 2:n_exps)
+    lp <- lp + b[which(nm == paste0("experimentE", k))] * (d$experiment == paste0("E", k))
+  d$recovered <- rbinom(nrow(d), 1L, plogis(lp))
+
+  form <- if (n_exps > 1) recovered ~ Accession + experiment + (1 | cageID)
+          else            recovered ~ Accession + (1 | cageID)
+  mod <- suppressWarnings(lme4::glmer(
+    form, family = binomial, data = d,
+    control = lme4::glmerControl(optimizer = "bobyqa", calc.derivs = FALSE)))
+
+  stopifnot(identical(names(lme4::fixef(mod)), nm))
+  fixef(mod)   <- b                      # simr's replacement function
+  VarCorr(mod) <- list(cageID = vc_cage)
+  mod
+}
+
+# Confirm the override took effect and the design has the expected size.
+m_chk_5B <- build_recovery_model(10, logit_effect = -1.554)
+stopifnot(
+  isTRUE(all.equal(unname(lme4::fixef(m_chk_5B)["AccessionBarrett Mn-1"]), -1.554,
+                   tolerance = 1e-8)),
+  nobs(m_chk_5B) == 10 * N_EXPS * 2 * INSECTS
+)
+
+# Fixed Effects:
+#           (Intercept)  AccessionBarrett Mn-1           experimentE2           experimentE3  
+#                 1.463                 -1.554                  0.735                  2.055 
+
+# Validation gates 
+# Gate 1 (calibration): no effect. Expect 0.03 to 0.07. Shows the test is not too liberal.
+# Gate 2 (recovery of a known effect): observed effect (-1.554). Expect > 0.95, consistent with the observed z = -6.20. Shows the test is not too conservative.
+
+
+if (RUN_GATES) {
+  print(powerSim(build_recovery_model(10, logit_effect = 0),
+                 test = fixed("AccessionBarrett Mn-1", "z"),
+                 nsim = 200, progress = FALSE))
+  print(powerSim(build_recovery_model(15, logit_effect = -1.554),
+                 test = fixed("AccessionBarrett Mn-1", "z"),
+                 nsim = 200, progress = FALSE))
+}
+
+
+# Power grid 
+
+design_grid_5B <- expand.grid(
+  cages_per_accession = c(6, 12, 18, 24, 30, 36),
+  logit_effect        = effect_table$logit_effect
+) |>
+  dplyr::mutate(reps_per_exp = cages_per_accession / N_EXPS,
+                total_cages  = cages_per_accession * 2)
+
+stopifnot(all(design_grid_5B$reps_per_exp %% 1 == 0))
+
+power_recovery <- cache_or_run(
+  here::here("results", "power_recovery_grid.rds"),
+  purrr::pmap_dfr(design_grid_5B, function(cages_per_accession, logit_effect,
+                                           reps_per_exp, total_cages) {
+    ps <- powerSim(build_recovery_model(reps_per_exp, logit_effect),
+                   test = fixed("AccessionBarrett Mn-1", "z"),
+                   nsim = NSIM_5B, progress = FALSE)
+    dplyr::bind_cols(
+      tibble::tibble(cages_per_accession, logit_effect, reps_per_exp, total_cages),
+      summarise_power(ps$pval < 0.05, nsim = NSIM_5B))
+  }))
+
+stopifnot(nrow(power_recovery) == nrow(design_grid_5B),
+          max(power_recovery$fail_rate) == 0)
+
+power_recovery <- power_recovery |>
+  dplyr::mutate(effect_lab = factor(round(logit_effect, 3),
+                                    levels = round(effect_table$logit_effect, 3),
+                                    labels = paste0(effect_table$reduction_pp, " pp")))
+
+power_recovery |>
+  dplyr::arrange(effect_lab, cages_per_accession) |>
+  dplyr::group_by(effect_lab) |>
+  dplyr::summarise(cages_80 = crossing(cages_per_accession, power, 0.80),
+                   cages_90 = crossing(cages_per_accession, power, 0.90),
+                   .groups = "drop")
+# Results (interpolated): "For VMB recovery, a 30 percentage-point reduction required roughly 13 and 18 cages for 80% and 90% power, respectively, while a 20 percentage-point reduction required about 30 cages for 80% and did not achieve 90% power within the designs evaluated (Figure 5B)."
+# Note: this study used 88 cages and observed a 33 point reduction.
+```
+
+# Figure 5C: Power analysis simulation for two-choice assay
+```{r}
+# Question: how many arenas are needed to detect a given host preference?
+
+# Note: simr has no beta-binomial family option (what was used for 4C), and the choice assay is overdispersed (phi = 4.52). Using glmmTMB::simulate_new() b/c it generates from the same beta-binomial family used to analyse the real assay. Preference did not differ between test dates (p = 0.335), so arenas are treated as one population and power depends on total arenas.
+# Uses cache_or_run(), summarise_power() and crossing() from the 5A chunk.
+
+
+# Parameters
+
+NSIM_5C <- 1000
+
+# One row per arena (unit of replication). 
+choice_arena <- VMB_choice |>
+  dplyr::filter(Plant_Name == "Freedom") |>
+  dplyr::transmute(
+    arena     = interaction(Rep, Date, drop = TRUE),   # Rep restarts each date
+    Date      = factor(Date),
+    n_freedom = Recovered,
+    n_barrett = Total_recovered - Recovered,
+    n_total   = Total_recovered                        # insects that settled
+  )
+
+stopifnot(
+  dplyr::n_distinct(choice_arena$arena) == nrow(choice_arena),
+  nrow(choice_arena) == 41,
+  all(choice_arena$n_freedom + choice_arena$n_barrett == choice_arena$n_total)
+)
+
+# Intercept-only beta-binomial (same specification as m_choice_bb in Figure 4), fitted to harvest the pooled preference and the dispersion.
+m_choice_bb_null <- glmmTMB::glmmTMB(cbind(n_freedom, n_barrett) ~ 1,
+                                     family = glmmTMB::betabinomial,
+                                     data = choice_arena)
+PHI_OBS   <- sigma(m_choice_bb_null)                                # 4.524407
+P_OBS     <- plogis(glmmTMB::fixef(m_choice_bb_null)$cond[[1]])     # 0.6676776
+N_DIST_5C <- choice_arena$n_total                                   # 41 values, mean 4.146341
+
+# Between-date SD, used only for the sensitivity analysis. As in 5A, for two groups differing by d, the SD of the group effects is d / sqrt(2) b/c variance couldn't be calculated.
+m_choice_bb_date <- glmmTMB::glmmTMB(cbind(n_freedom, n_barrett) ~ Date,
+                                     family = glmmTMB::betabinomial,
+                                     data = choice_arena)
+SIGMA_DATE_OBS <- abs(unname(glmmTMB::fixef(m_choice_bb_date)$cond[2])) / sqrt(2)  # 0.278
+
+cat(sprintf(
+  "arenas %d | insects %d | preference %.1f%% | phi %.2f | between-date SD %.3f\n",
+  nrow(choice_arena), sum(N_DIST_5C), 100 * P_OBS, PHI_OBS, SIGMA_DATE_OBS))
+
+
+# Effect sizes
+# Proportion of settled insects choosing Freedom (susceptible reference), tested against 0.50. Observed: 66.8%.
+
+effect_table_C <- tibble::tibble(preference = c(0.60, 0.65, 0.70, 0.75)) |>
+  dplyr::mutate(pref_pct = preference * 100,
+                fold     = preference / (1 - preference))
+effect_table_C
+# 0.60 is 1.5-fold | 0.65 is 1.9-fold | 0.70 is 2.3-fold | 0.75 is 3.0-fold
+
+# preference | pref_pct | fold
+# 0.60        	60	      1.500000		
+# 0.65	        65	      1.857143	<- so Freedom vs. Barrett Mn-1 would be around here	(2.012048 fold difference)
+# 0.70	        70	      2.333333		
+# 0.75	        75	      3.000000	
+
+# Simulation and analysis 
+# simulate_new() takes parameters on internal scales: betadisp is log(phi) and theta is log(SD). It returns success counts, not proportions. Both scales are checked against known answers in the gates below.
+
+simulate_choice_data <- function(total_arenas, preference,
+                                 n_dates = 1L, sigma_date = 0) {
+  stopifnot(total_arenas %% n_dates == 0)
+
+  newdat <- expand.grid(
+    arena_in_date = seq_len(total_arenas / n_dates),
+    date_id       = factor(seq_len(n_dates))
+  )
+  newdat$n_total <- sample(N_DIST_5C, nrow(newdat), replace = TRUE)
+
+  if (sigma_date > 0 && n_dates > 1) {
+    form <- ~ 1 + (1 | date_id)
+    pars <- list(beta = qlogis(preference), betadisp = log(PHI_OBS),
+                 theta = log(sigma_date))
+  } else if (sigma_date > 0) {
+    # a single date is still one draw from the population of dates
+    form <- ~ 1
+    pars <- list(beta = qlogis(preference) + rnorm(1, 0, sigma_date),
+                 betadisp = log(PHI_OBS))
+  } else {
+    form <- ~ 1
+    pars <- list(beta = qlogis(preference), betadisp = log(PHI_OBS))
+  }
+
+  y <- glmmTMB::simulate_new(form, newdata = newdat,
+                             family    = glmmTMB::betabinomial,
+                             weights   = newdat$n_total,
+                             newparams = pars)[[1]]
+
+  newdat$n_freedom <- if (is.matrix(y)) y[, 1] else as.numeric(y)
+  newdat$n_barrett <- newdat$n_total - newdat$n_freedom
+  stopifnot(all(newdat$n_freedom >= 0),
+            all(newdat$n_freedom <= newdat$n_total))
+  newdat
+}
+
+# Pooled test of departure from 50:50. Quasibinomial rather than beta-binomial because the latter fails to converge at small n inside the loop (NaN SEs and dropped replicates, which bias power upward). The two agree on the real data (p = 0.00077 vs 0.00128).
+test_choice_once <- function(dat) {
+  fit <- try(glm(cbind(n_freedom, n_barrett) ~ 1, family = quasibinomial,
+                 data = dat), silent = TRUE)
+  if (inherits(fit, "try-error")) return(NA)
+  p <- summary(fit)$coefficients["(Intercept)", "Pr(>|t|)"]
+  if (is.na(p)) NA else p < 0.05
+}
+
+
+# Validation gates
+
+if (RUN_GATES) {
+  # Gate 1 (fixed-effect and dispersion scales): simulating at the observed preference must reproduce the observed mean and its sampling SD. Expect mean~0.668, SD  ~0.045. Confirmed previously: 0.6681 / 0.0451, which establishes betadisp = log(phi).
+  set.seed(1)
+  gate1_5C <- replicate(500, {
+    d <- simulate_choice_data(41, P_OBS)
+    mean(d$n_freedom / d$n_total)
+  })
+  print(c(target = P_OBS, mean = mean(gate1_5C), sd = sd(gate1_5C)))
+
+  # Gate 2 (random-effect scale, used only by the sensitivity analysis): sigma_date = 0.5 should return a between-date SD near 0.5 on the logit scale. Expect 0.45 to 0.65 (the SD of 3 draws is biased low, while arena sampling noise inflates it). Confirmed previously: 0.548, which establishes theta = log(SD).
+  set.seed(2)
+  gate2_5C <- replicate(300, {
+    d <- simulate_choice_data(60, 0.65, n_dates = 3, sigma_date = 0.5)
+    sd(qlogis(tapply(d$n_freedom / d$n_total, d$date_id, mean)))
+  })
+  print(mean(gate2_5C))
+
+  # Gate 3 (the analysis function on the real data).
+  # Expect estimate 0.7376, SE 0.2128, t = 3.47, p = 0.00128.
+  print(summary(glm(cbind(n_freedom, n_barrett) ~ 1, family = quasibinomial,
+                    data = choice_arena))$coefficients)
+
+  # Gate 4 (calibration): under a true 50:50 null, rejection must sit near
+  # 0.05. Expect 0.03 to 0.07 at every arena count.
+  set.seed(3)
+  print(sapply(c(20, 40, 80), function(n)
+    mean(replicate(500, test_choice_once(simulate_choice_data(n, 0.50))),
+         na.rm = TRUE)))
+}
+
+
+# Power grid:
+design_grid_5C <- expand.grid(total_arenas = seq(10, 100, by = 10),
+                              preference   = effect_table_C$preference)
+
+power_choice <- cache_or_run(
+  here::here("results", "power_choice_grid.rds"),
+  purrr::pmap_dfr(design_grid_5C, function(total_arenas, preference) {
+    hits <- replicate(NSIM_5C, test_choice_once(
+      simulate_choice_data(total_arenas, preference)))
+    dplyr::bind_cols(tibble::tibble(total_arenas, preference),
+                     summarise_power(hits, nsim = NSIM_5C))
+  }))
+
+stopifnot(nrow(power_choice) == nrow(design_grid_5C),
+          max(power_choice$fail_rate) == 0)
+
+power_choice <- power_choice |>
+  dplyr::mutate(pref_lab = factor(preference,
+                                  levels = effect_table_C$preference,
+                                  labels = paste0(effect_table_C$pref_pct, "%")))
+
+power_choice |>
+  dplyr::arrange(pref_lab, total_arenas) |>
+  dplyr::group_by(pref_lab) |>
+  dplyr::summarise(arenas_80 = crossing(total_arenas, power, 0.80),
+                   arenas_90 = crossing(total_arenas, power, 0.90),
+                   .groups = "drop")
+
+# Results (interpolated): "For the two-choice assay, detecting a moderate host preference (65% of recovered insects settling on the susceptible accession, a 1.9-fold difference) required approximately 36 total arenas for 80% power and 49 for 90% power (Figure 5C). A weaker 60% preference required roughly 75 arenas and did not achieve 90% power within the designs evaluated."
+
+# Context: this study used 41 arenas and observed a 66.8% preference.
+
+# Sensitivity (cost of pooling non-equivalent dates not reported): 
+# Simulated under a TRUE NULL with between-date variation, analysed by pooling.
+
+sens_grid_5C <- expand.grid(
+  total_arenas = c(30, 60, 90),
+  n_dates      = c(1, 2, 3),
+  sigma_date   = c(0, SIGMA_DATE_OBS, 2 * SIGMA_DATE_OBS)
+) |>
+  dplyr::filter(total_arenas %% n_dates == 0)
+
+power_choice_sens <- cache_or_run(
+  here::here("results", "power_choice_sens.rds"),
+  purrr::pmap_dfr(sens_grid_5C, function(total_arenas, n_dates, sigma_date) {
+    hits <- replicate(NSIM_5C, test_choice_once(
+      simulate_choice_data(total_arenas, 0.50,
+                           n_dates = n_dates, sigma_date = sigma_date)))
+    tibble::tibble(total_arenas, n_dates, sigma_date,
+                   type1 = mean(hits, na.rm = TRUE))
+  }),
+  seed = 456L)
+
+power_choice_sens |>
+  tidyr::pivot_wider(names_from = sigma_date, values_from = type1,
+                     names_prefix = "sigmaDate_") |>
+  print(n = Inf)
+```
+
+### Figure 5ABC
+```{r}
+
+theme_fig5 <- theme_classic(base_size = 10) +
+  theme(
+    axis.title        = element_text(size = 10),
+    axis.text         = element_text(size = 8),
+    axis.line         = element_line(linewidth = 0.25),   # about 0.5 pt
+    axis.ticks        = element_line(linewidth = 0.25),
+    legend.title      = element_text(size = 8),
+    legend.text       = element_text(size = 8),
+    legend.key.width  = unit(16, "pt"),
+    legend.key.height = unit(10, "pt"),
+    plot.tag          = element_text(size = 12, face = "bold"),
+    plot.margin       = margin(4, 6, 4, 4)
+  )
+
+# Palettes
+pal_nochoice <- c("#D55E00", "#009E73", "#0072B2")               # 20, 30, 40
+pal_choice   <- c("#46337E", "#365C8D", "#1FA187", "#73D055")    # 60, 65, 70, 75
+
+LINE_W <- 0.5
+PT_SZ  <- 1.3
+
+X_MAX_AB <- 48                       # shared axis for panels A and B
+X_BRK_AB <- seq(0, X_MAX_AB, 12)
+
+# Reference lines: dashed = 80%, dotted = 90%
+ref_lines <- list(
+  geom_hline(yintercept = 0.80, linetype = "dashed", colour = "grey50", linewidth = 0.3),
+  geom_hline(yintercept = 0.90, linetype = "dotted", colour = "grey50", linewidth = 0.3)
+)
+
+
+## Harmonize the legend labels for growth and recopvery
+# power_growth_data is a relative percent reduction in body area; power_recovery_data is a percentage-point reduction in recovery. Both are shown as 20 / 30 / 40 under one legend.
+
+power_growth_data <- power_growth |>
+  dplyr::filter(cages_per_accession <= X_MAX_AB) |>     # drops only the 60-cage point
+  dplyr::mutate(effect_n = factor(as.character(effect_lab),
+                                  levels = c("20%", "30%", "40%"),
+                                  labels = c("20", "30", "40")))
+
+power_recovery_data <- power_recovery |>
+  dplyr::filter(cages_per_accession <= X_MAX_AB) |>
+  dplyr::mutate(effect_n = factor(as.character(effect_lab),
+                                  levels = c("20 pp", "30 pp", "40 pp"),
+                                  labels = c("20", "30", "40")))
+
+stopifnot(!anyNA(power_growth_data$effect_n), !anyNA(power_recovery_data$effect_n))
+
+
+## Panel A: growth
+# Truncated at 48 cages per accession with the 90% crossings falling at about 44 (20% reduction), 19 (30%) and 12 (40%), all visible, and the 45-cage point is retained. Keeping the 60-cage point would make this panel half again as wide as B (recovery)
+
+power_growth_panel_A <- ggplot(power_growth_data, aes(cages_per_accession, power, colour = effect_n)) +
+  ref_lines +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill = effect_n),
+              alpha = 0.12, colour = NA) +
+  geom_line(linewidth = LINE_W) +
+  geom_point(size = PT_SZ) +
+  scale_colour_manual(values = pal_nochoice, drop = FALSE) +
+  scale_fill_manual(values = pal_nochoice, drop = FALSE, guide = "none") +
+  scale_x_continuous(limits = c(0, X_MAX_AB), breaks = X_BRK_AB,
+                     expand = expansion(mult = 0.02)) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2),
+                     expand = expansion(mult = 0.02)) +
+  labs(tag = "A", x = "Cages per accession", y = "Power",
+       colour = "Reduction in response") +
+  theme_fig5
+
+
+## Panel B: recovery
+# Same scales as A. The y-axis title is suppressed because the panels sit side by side and share it.
+
+power_recovery_panel_B <- ggplot(power_recovery_data, aes(cages_per_accession, power, colour = effect_n)) +
+  ref_lines +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill = effect_n),
+              alpha = 0.12, colour = NA) +
+  geom_line(linewidth = LINE_W) +
+  geom_point(size = PT_SZ) +
+  scale_colour_manual(values = pal_nochoice, drop = FALSE) +
+  scale_fill_manual(values = pal_nochoice, drop = FALSE, guide = "none") +
+  scale_x_continuous(limits = c(0, X_MAX_AB), breaks = X_BRK_AB,
+                     expand = expansion(mult = 0.02)) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2),
+                     expand = expansion(mult = 0.02)) +
+  labs(tag = "B", x = "Cages per accession", y = NULL,
+       colour = "Reduction in response") +
+  theme_fig5 +
+  theme(axis.title.y = element_blank())
+
+
+## Panel C: two-choice
+# Separate scale and legend: the replication unit is the arena (each presents both accessions), and the quantity is a settling percentage, not a reduction.
+
+power_choice_panel_C <- ggplot(power_choice, aes(total_arenas, power, colour = pref_lab)) +
+  ref_lines +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill = pref_lab),
+              alpha = 0.12, colour = NA) +
+  geom_line(linewidth = LINE_W) +
+  geom_point(size = PT_SZ) +
+  scale_colour_manual(values = pal_choice, drop = FALSE) +
+  scale_fill_manual(values = pal_choice, drop = FALSE, guide = "none") +
+  scale_x_continuous(limits = c(0, 100), breaks = seq(0, 100, 20),
+                     expand = expansion(mult = 0.02)) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2),
+                     expand = expansion(mult = 0.02)) +
+  labs(tag = "C", x = "Arenas", y = "Power", colour = "Host preference") +
+  theme_fig5
+
+
+## Legends
+
+legend_style <- theme(
+  legend.position   = "bottom",
+  legend.direction  = "horizontal",
+  legend.margin     = margin(0, 0, 0, 0),
+  legend.box.margin = margin(0, 0, 0, 0),
+  legend.background = element_blank()
+)
+
+leg_AB <- cowplot::get_legend(power_growth_panel_A + legend_style)
+leg_C  <- cowplot::get_legend(power_choice_panel_C + legend_style)
+
+A_clean <- power_growth_panel_A + theme(legend.position = "none")
+B_clean <- power_recovery_panel_B + theme(legend.position = "none")
+C_clean <- power_choice_panel_C + theme(legend.position = "none")
+
+
+## Combine and save
+
+Power_combined_plot <-
+  (A_clean | B_clean) /
+  leg_AB /
+  C_clean /
+  leg_C +
+  patchwork::plot_layout(heights = c(1, 0.09, 1, 0.09))
+
+Power_combined_plot
+
+save_fig(Power_combined_plot, "AEJV_Fig5_PowerAnalysis", height = 6.5)
+```
+
+
+
+# SUPPLEMENTAL FIGURE S1: Egg Count
+```{r}
+
+# Keep only rows with non-missing Area
+dat_growth <- subset(VMB_Crawler_combined_df, !is.na(Area))
+
+
+df_reproduction <- dat_growth %>%
+  mutate(
+    # Reproductive status: NA = Growing, 1 = Reproducing
+    Egg_mass_recode = ifelse(Egg_mass > 0, 1, NA),
+
+    # Create a factor for plotting
+    Reproductive_Status = ifelse(is.na(Egg_mass_recode),
+                                 "Growing", "Reproducing"),
+    Reproductive_Status = factor(Reproductive_Status,
+                                 levels = c("Growing", "Reproducing"))
+  )
+
+
+#Week 4 only 15APR25
+    df_15APR25_w4 <- df_reproduction %>%
+      filter(experiment %in% c( "15APR25")) %>%   # <-- FIXED
+      filter(!is.na(Egg_Count)) %>%
+      filter(Week_num %in% 4) %>%
+      droplevels()
+    
+    #Identify miscounts
+    df_15APR25_w4 %>%
+      filter(Egg_Count > 299)
+    
+    
+    #Apply the correction
+    df_15APR25_w4 <- df_15APR25_w4 %>%
+      mutate(
+        Egg_Count_original = Egg_Count,   # keep original values
+        Egg_Count = ifelse(Egg_Count > 299, 250, Egg_Count)
+      )
+
+    
+    LCA_15APR25_w4 <- ggplot(df_15APR25_w4,
+           aes(x = Plant_Name, y = Egg_Count, fill = Plant_Name)) +
+      geom_boxplot(outlier.shape = NA) +
+      geom_jitter(width = 0.1, alpha = 0.6, size = 1) +
+      scale_fill_manual(values = acc_palette) +
+      labs(
+        x = NULL,
+        y = "Egg count\n (week 4 experiment #1)"
+      ) +
+      # theme_bw(base_size = 14) +
+      coord_cartesian(ylim = c(1, 300))+
+      theme_pub
+    
+    
+    #LCA_15APR25_w4
+
+#Week 5 only 30JUL25
+      df_30JUL25_w5 <- df_reproduction %>%
+        filter(experiment %in% c( "30JUL25")) %>%   # <-- FIXED
+        filter(!is.na(Egg_Count)) %>%
+        filter(Week_num %in% 5) %>%
+        droplevels()
+      
+    
+      LCA_30JUL25_w5 <- ggplot(df_30JUL25_w5,
+             aes(x = Plant_Name, y = Egg_Count, fill = Plant_Name)) +
+        geom_boxplot(outlier.shape = NA) +
+        geom_jitter(width = 0.1, alpha = 0.6, size = 1) +
+        scale_fill_manual(values = acc_palette) +
+        labs(
+          x = NULL,
+          y = "Egg count\n (week 5 experiment #2)"
+        ) +
+       # theme_bw(base_size = 14) +
+        coord_cartesian(ylim = c(1, 50))+
+    theme(legend.position = "bottom") +
+      theme_pub
+
+      
+#LCA_30JUL25_w5
+
+
+
+#Week 4-6 only 27JAN26
+
+
+df_27JAN26_w4_6 <- df_reproduction %>%
+  filter(experiment == "27JAN26", !is.na(Egg_Count))%>%
+  filter(Week_num %in% 4:6)%>%
+ # filter(Plant_Name %in% c("Freedom")) %>%
+  droplevels()
+
+egg_means <- df_27JAN26_w4_6 %>%
+  group_by(Week_num, Plant_Name) %>%
+  summarize(mean_eggs = mean(Egg_Count), .groups = "drop")
+
+
+LCA_Eggcount_weeks4_6_plot <- ggplot(
+    df_27JAN26_w4_6,
+    aes(x = factor(Week_num), y = Egg_Count, color = Plant_Name)
+  ) +
+  geom_jitter(width = 0.1) +
+
+  geom_line(
+    data = egg_means,
+    aes(x = factor(Week_num), y = mean_eggs, group = Plant_Name),
+    linewidth = 0.5
+  ) +
+  scale_color_manual(values = acc_palette) +
+  labs(
+    x = NULL,
+    y = "Egg count\n (week 4–6 experiment #3)"
+  ) +
+  theme_pub +
+  theme(
+    legend.position = c(0.98, 0.98),      # ← upper-right corner
+    legend.justification = c("right", "top"),
+    legend.background = element_rect(
+      fill = "white",
+      color = "black",
+      linewidth = 0.5
+    ),
+    legend.title = element_blank()
+  )
+
+
+#LCA_Eggcount_weeks4_6_plot
+
+FigS1A_labeled <- LCA_15APR25_w4+ 
+  theme_pub+
+  labs(tag = "A") +
+  theme(plot.tag = element_text(size = 14, face = "bold"))
+
+
+FigS1B_labeled <-LCA_30JUL25_w5+ 
+  theme_pub+
+  labs(tag = "B") +
+  theme(plot.tag = element_text(size = 14, face = "bold"))
+
+
+FigS1C_labeled <-LCA_Eggcount_weeks4_6_plot+ 
+  theme_pub+
+  labs(tag = "C") +
+  theme(plot.tag = element_text(size = 14, face = "bold"))+
+  theme(
+    legend.position = c(0.98, 0.98),      # ← upper-right corner
+    legend.justification = c("right", "top"),
+    legend.background = element_rect(
+      fill = "white",
+      color = "black",
+      linewidth = 0.5
+    ),
+    legend.title = element_blank()
+  )
+
+
+final_FigS1_wlegend <- 
+  (FigS1A_labeled | FigS1B_labeled) /
+   FigS1C_labeled +
+  patchwork::plot_layout(heights = c(1, 1))
+
+final_FigS1_wlegend
+
+
+## Save 
+
+save_fig(final_FigS1_wlegend, "AEJV_FigS1_Eggs", height = 8.25)
+
+```
